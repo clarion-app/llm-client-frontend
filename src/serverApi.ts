@@ -1,12 +1,6 @@
 import { createApi, fetchBaseQuery, BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
 import { backend } from '.';
-import { LaravelModelType } from '@clarion-app/types';
-
-export interface ServerType extends LaravelModelType {
-  name: string;
-  server_url: string;
-  token: string;
-}
+import { ServerType } from './types';
 
 const rawBaseQuery = (baseUrl: string) => fetchBaseQuery({ 
   baseUrl: baseUrl,

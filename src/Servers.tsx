@@ -3,10 +3,10 @@ import {
   useCreateServerMutation,
   useUpdateServerMutation,
   useDeleteServerMutation,
-  ServerType,
 } from "./serverApi";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ServerType } from "./types";
 
 const Servers = () => {
   const { data: servers, error, isLoading } = useGetServersQuery(null);

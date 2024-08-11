@@ -1,11 +1,6 @@
 import { createApi, fetchBaseQuery, BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
 import { backend } from '.';
-import { LaravelModelType } from '@clarion-app/types';
-
-export interface LanguageModelType extends LaravelModelType {
-  name: string;
-  server_id: string;
-}
+import { LanguageModelType } from './types';
 
 const rawBaseQuery = (baseUrl: string) => fetchBaseQuery({ 
   baseUrl: baseUrl,
@@ -28,7 +23,7 @@ export const modelApi = createApi({
   baseQuery: baseQuery(),
   tagTypes: ['LanguageModel'],
   endpoints: (builder) => ({
-    getModels: builder.query({
+    getModels: builder.query<LanguageModelType[], string>({
       query: (server_id) => `/server/${server_id}/model`,
       providesTags: ['LanguageModel'],
     }),
