@@ -27,9 +27,14 @@ export const modelApi = createApi({
       query: (server_id) => `/server/${server_id}/model`,
       providesTags: ['LanguageModel'],
     }),
+    getAllModels: builder.query<LanguageModelType[], void>({
+      query: () => `/model`,
+      providesTags: ['LanguageModel'],
+    }),
   }),
 });
 
 export const {
   useGetModelsQuery,
+  useGetAllModelsQuery,
 } = modelApi;

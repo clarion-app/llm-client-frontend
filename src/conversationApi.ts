@@ -24,7 +24,7 @@ export const conversationApi = createApi({
   tagTypes: ['Conversation'],
   endpoints: (builder) => ({
     getConversations: builder.query({
-      query: (user_id) => `/user/${user_id}/conversation`,
+      query: () => `/conversation`,
       providesTags: ['Conversation'],
     }),
     getConversation: builder.query({
@@ -58,5 +58,7 @@ export const conversationApi = createApi({
 });
 
 export const {
+  useCreateConversationMutation,
+  useDeleteConversationMutation,
   useGetConversationsQuery,
 } = conversationApi;

@@ -17,11 +17,9 @@ export interface MessageType extends LaravelModelType {
 export interface ConversationType extends LaravelModelType {
   title: string;
   user_id: string;
-  server_group_id: string;
+  server_id: string;
   model: string;
   character: string;
-  messages?: MessageType[];
-  latest_message?: MessageType;
 }
 
 export interface ServerType extends LaravelModelType {

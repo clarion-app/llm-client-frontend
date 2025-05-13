@@ -28,7 +28,7 @@ const Servers = () => {
   const handleExistingInputChange = (event: React.ChangeEvent<HTMLInputElement>, server: ServerType) => {
     const { name, value } = event.target;
     const updatedServer = { ...server, [name]: value };
-    updateServer({ id: server.id, server: updatedServer });
+    updateServer({ id: server.id!, server: updatedServer });
   };
 
   const handleSubmitNewServer = () => {
@@ -89,7 +89,7 @@ const Servers = () => {
                   </button>
                 <button
                   className="button is-danger is-small"
-                  onClick={() => deleteServer(server.id)}
+                  onClick={() => deleteServer(server.id!)}
                 >
                   Delete
                 </button>
