@@ -54,6 +54,14 @@ export const conversationApi = createApi({
       }),
       invalidatesTags: ['Conversation'],
     }),
+    createCommandConversation: builder.mutation<ConversationType, { command: string }>({
+      query: (payload) => ({
+        url: '/command-conversation',
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: ['Conversation'],
+    }),
   }),
 });
 
@@ -61,4 +69,5 @@ export const {
   useCreateConversationMutation,
   useDeleteConversationMutation,
   useGetConversationsQuery,
+  useCreateCommandConversationMutation,
 } = conversationApi;

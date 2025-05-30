@@ -4,6 +4,7 @@ import {
   useGetConversationsQuery,
   useDeleteConversationMutation,
   useCreateConversationMutation,
+  useCreateCommandConversationMutation,
 } from "./conversationApi";
 import {
   useUpdateMessageLocallyMutation,
@@ -17,6 +18,7 @@ import { backend } from ".";
 import { ConversationType, MessageType } from "./types";
 import Message from "./Message";
 import { WindowWS } from "@clarion-app/types";
+import { useRef } from "react";
 
 interface ConversationPropsType {
   conversation_id?: string;
@@ -41,6 +43,7 @@ const Conversation = (props: ConversationPropsType) => {
   const { data: models } = useGetModelsQuery(defaultServer);
   const defaultModel = models?.[0]?.name || null;
   const [createConversation] = useCreateConversationMutation();
+  const [createCommand] = useCreateCommandConversationMutation();
   const [createMessage] = useCreateMessageMutation();
   const [newMessage, setNewMessage] = useState<string>("");
   const {
@@ -53,6 +56,14 @@ const Conversation = (props: ConversationPropsType) => {
   const [deleteConversation] = useDeleteConversationMutation();
 
   const win = window as unknown as WindowWS;
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 500);
+  };
 
   useEffect(() => {
     if (conversationId === undefined) {
@@ -74,18 +85,21 @@ const Conversation = (props: ConversationPropsType) => {
             responseTime: 0,
           };
           updateMessageLocally(msg);
+          scrollToBottom();
         }
       )
       .listen(
         ".ClarionApp\\LlmClient\\Events\\FinishOpenAIConversationResponseEvent",
         () => {
           refetch();
+          scrollToBottom();
         }
       )
       .listen(
         ".ClarionApp\\LlmClient\\Events\\NewConversationMessageEvent",
         () => {
           refetch();
+          scrollToBottom();
         }
       );
   }, [conversationId]);
@@ -101,14 +115,22 @@ const Conversation = (props: ConversationPropsType) => {
     user_id: backend.user.id,
   };
 
-  const updateConversation = async () => {
+  const updateConversation = async (isCommand: boolean) => {
     let isNewConversation = false;
     let updateConversationId = conversationId;
     if (!updateConversationId) {
-      const { data: newConversation } = await createConversation(conversation);
+      const { data: newConversation } = !isCommand ? 
+        await createConversation(conversation) :
+        await createCommand({ command: newMessage });
       if (!newConversation) return;
       updateConversationId = newConversation.id;
       isNewConversation = true;
+      setConversationId(updateConversationId);
+    }
+
+    if(isCommand) {
+      setNewMessage("");
+      return;
     }
 
     const message = {
@@ -125,9 +147,6 @@ const Conversation = (props: ConversationPropsType) => {
       if (!createdMessage) return;
     }, 1000);
     setNewMessage("");
-    if (isNewConversation) {
-      setConversationId(updateConversationId);
-    }
   };
 
   const generateTitle = async () => {
@@ -189,10 +208,16 @@ const Conversation = (props: ConversationPropsType) => {
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            updateConversation();
+            updateConversation(false);
           }
         }}
       ></textarea>
+      <button
+        className="button is-primary mt-2"
+        onClick={() => {
+          updateConversation(true);
+        }}>Command</button>
+      <div ref={messagesEndRef} />
     </div>
   );
 };
