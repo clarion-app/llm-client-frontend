@@ -72,7 +72,8 @@
                         "name": "Models",
                         "path": "/clarion-app/llm-client/models"
                     }
-                ]
+                ],
+                "pinnedEntries": ["Conversations"]
             }
         }
     }
