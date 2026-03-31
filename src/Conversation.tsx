@@ -64,6 +64,11 @@ const Conversation = (props: ConversationPropsType) => {
   const win = window as unknown as WindowWS;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const refetchRef = useRef(refetch);
+  const updateMessageLocallyRef = useRef(updateMessageLocally);
+
+  useEffect(() => { refetchRef.current = refetch; }, [refetch]);
+  useEffect(() => { updateMessageLocallyRef.current = updateMessageLocally; }, [updateMessageLocally]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -91,21 +96,21 @@ const Conversation = (props: ConversationPropsType) => {
             streaming: true,
             responseTime: 0,
           };
-          updateMessageLocally(msg);
+          updateMessageLocallyRef.current(msg);
           scrollToBottom();
         }
       )
       .listen(
         ".ClarionApp\\LlmClient\\Events\\FinishOpenAIConversationResponseEvent",
         () => {
-          refetch();
+          refetchRef.current();
           scrollToBottom();
         }
       )
       .listen(
         ".ClarionApp\\LlmClient\\Events\\NewConversationMessageEvent",
         () => {
-          refetch();
+          refetchRef.current();
           scrollToBottom();
         }
       )
