@@ -17,13 +17,26 @@ export interface MessageType extends LaravelModelType {
 export interface ConversationType extends LaravelModelType {
   title: string;
   user_id: string;
-  server_id: string;
-  model: string;
+  server_id: string | null;
+  model: string | null;
   character: string;
 }
 
 export interface ServerType extends LaravelModelType {
-    name: string;
-    server_url: string;
-    token: string;
-  }
+  name: string;
+  server_url: string;
+  token?: string;
+}
+
+export interface ApiCallConfirmationType {
+  conversation_id: string;
+  message_id: string;
+  method: string;
+  path: string;
+  body: Record<string, unknown>;
+}
+
+export interface UserSettingType {
+  server_id: string | null;
+  model: string | null;
+}

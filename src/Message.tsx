@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { MessageType } from "./types";
+import { MessageType, ApiCallConfirmationType } from "./types";
 import Markdown from "markdown-to-jsx";
 import CodeBlock from "./CodeBlock";
+import ApiCallConfirmation from "./ApiCallConfirmation";
 
 interface MessagePropsType extends MessageType {
   onDelete: (messageId: string) => void;
@@ -9,6 +10,30 @@ interface MessagePropsType extends MessageType {
 
 const Message = (props: MessagePropsType) => {
   const [showRaw, setShowRaw] = useState(false);
+
+  if (props.content.startsWith('__pending_api_call:')) {
+    try {
+      const payload: ApiCallConfirmationType = JSON.parse(props.content.slice('__pending_api_call:'.length));
+      return (
+        <div className="px-4 py-2 message m-4">
+          <ApiCallConfirmation {...payload} />
+        </div>
+      );
+    } catch {
+      // Fall through to normal rendering if JSON parse fails
+    }
+  }
+
+  if (props.content === '__cancelled') {
+    return (
+      <div className="px-4 py-2 message m-4">
+        <div className="notification is-warning">
+          API call denied by user.
+        </div>
+      </div>
+    );
+  }
+
   const content = props.content.replace(/```/g, "\n```");
   return (
     <div className="px-4 py-2 message m-4">

@@ -1,33 +1,17 @@
-import { createApi, fetchBaseQuery, BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
-import { backend } from '.';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { baseQuery } from './baseQuery';
 import { MessageType } from './types';
-
-const rawBaseQuery = (baseUrl: string) => fetchBaseQuery({
-    baseUrl: baseUrl,
-    prepareHeaders: (headers) => {
-        headers.set('Content-Type', 'application/json');
-        headers.set('Authorization', 'Bearer ' + backend.token);
-        return headers;
-    }
-});
-
-function baseQuery(): BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> {
-    return async (args, api, extraOptions) => {
-        let result = await rawBaseQuery((await backend).url + '/api/clarion-app/llm-client')(args, api, extraOptions);
-        return result;
-    };
-}
 
 export const messageApi = createApi({
     reducerPath: 'llm-client-messageApi',
     baseQuery: baseQuery(),
     tagTypes: ['Message'],
     endpoints: (builder) => ({
-        getMessages: builder.query<any, string>({
+        getMessages: builder.query<MessageType[], string>({
             query: (conversation_id) => `/conversation/${conversation_id}/message`,
-            providesTags: (result: { id: string }[] | undefined) => {
+            providesTags: (result) => {
                 return result
-                    ? [...result.map(({ id }) => ({ type: 'Message' as const, id })), 'Message']
+                    ? [...result.filter((m) => m.id).map(({ id }) => ({ type: 'Message' as const, id: id! })), 'Message']
                     : ['Message']
             },
         }),
@@ -67,7 +51,7 @@ export const messageApi = createApi({
                 // Update the local state when the mutation is triggered
                 dispatch(
                     messageApi.util.updateQueryData('getMessages', message.conversation_id, (draftMessages) => {
-                        const messageToUpdate = draftMessages.find((m: { id: any; }) => m.id === message.id);
+                        const messageToUpdate = draftMessages.find((m: MessageType) => m.id === message.id);
                         if (messageToUpdate) {
                             messageToUpdate.content = message.content;
                             messageToUpdate.streaming = message.streaming;

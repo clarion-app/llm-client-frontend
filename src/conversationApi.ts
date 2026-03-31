@@ -1,22 +1,6 @@
-import { createApi, fetchBaseQuery, BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
-import { backend } from '.';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { baseQuery } from './baseQuery';
 import { ConversationType } from './types';
-
-const rawBaseQuery = (baseUrl: string) => fetchBaseQuery({ 
-  baseUrl: baseUrl,
-  prepareHeaders: (headers) => {
-      headers.set('Content-Type', 'application/json');
-      headers.set('Authorization', 'Bearer ' + backend.token);
-      return headers;
-  }
-});
-
-function baseQuery(): BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> {
-    return async (args, api, extraOptions) => {
-        let result = await rawBaseQuery((await backend).url + '/api/clarion-app/llm-client')(args, api, extraOptions);
-        return result;
-    };
-}
 
 export const conversationApi = createApi({
   reducerPath: 'llm-client-conversationApi',
@@ -62,6 +46,14 @@ export const conversationApi = createApi({
       }),
       invalidatesTags: ['Conversation'],
     }),
+    confirmApiCall: builder.mutation<void, { conversationId: string; message_id: string; approved: boolean }>({
+      query: ({ conversationId, message_id, approved }) => ({
+        url: `/conversation/${conversationId}/confirm-api-call`,
+        method: 'POST',
+        body: { message_id, approved },
+      }),
+      invalidatesTags: ['Conversation'],
+    }),
   }),
 });
 
@@ -70,4 +62,5 @@ export const {
   useDeleteConversationMutation,
   useGetConversationsQuery,
   useCreateCommandConversationMutation,
+  useConfirmApiCallMutation,
 } = conversationApi;
