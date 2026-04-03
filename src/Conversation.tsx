@@ -183,9 +183,9 @@ const Conversation = (props: ConversationPropsType) => {
     try {
       const response = await fetch(url, {
         method: "POST",
+        credentials: 'include',
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${backend.token}`,
         },
       });
       if (!response.ok) {
