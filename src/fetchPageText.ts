@@ -44,9 +44,10 @@ export const fetchPageText = async (url: string): Promise<string> => {
 
   const response = await fetch(`${backend.url}/api/clarion-app/llm-client/page-text`, {
     method: "POST",
+    credentials: 'include',
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${backend.token}`,
+      "Accept": "application/json",
     },
     body: JSON.stringify({ url }),
   });

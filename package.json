@@ -15,7 +15,7 @@
     "author": "Tim Schwartz <tim@metaverse.systems>",
     "license": "MIT",
     "dependencies": {
-        "@clarion-app/types": "^1.4.0",
+        "@clarion-app/types": "^2.0.0",
         "@reduxjs/toolkit": "^2.2.6",
         "dompurify": "^3.3.3",
         "markdown-to-jsx": "^7.7.6",
