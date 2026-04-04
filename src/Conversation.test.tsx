@@ -21,8 +21,9 @@ vi.mock('.', () => ({
 let mockErrorStatus: number | null = null;
 
 // Mock the baseQuery module to prevent actual API calls
-vi.mock('./baseQuery', () => ({
-  baseQuery: () => async (args: any) => {
+vi.mock('@clarion-app/frontend-base', () => ({
+  createBackendConfig: () => ({ backend: { url: 'http://localhost:8000', user: { id: '', name: '', email: '' } }, updateFrontend: () => {} }),
+  createBaseQuery: () => async (args: any) => {
     const url = typeof args === 'string' ? args : args?.url;
     // Return error for messages endpoint when mockErrorStatus is set
     if (url && url.includes('/message') && mockErrorStatus) {

@@ -1,10 +1,11 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { baseQuery } from './baseQuery';
+import { createBaseQuery } from '@clarion-app/frontend-base';
+import { backend } from './config';
 import { MessageType } from './types';
 
 export const messageApi = createApi({
     reducerPath: 'llm-client-messageApi',
-    baseQuery: baseQuery(),
+    baseQuery: createBaseQuery({ routePrefix: '/api/clarion-app/llm-client', backendConfig: backend }),
     tagTypes: ['Message'],
     endpoints: (builder) => ({
         getMessages: builder.query<MessageType[], string>({

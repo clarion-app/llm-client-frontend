@@ -15,8 +15,9 @@ let mockServers: any[] = [];
 let mockModels: any[] = [];
 let mockUserSetting: any = { server_id: null, model: null };
 
-vi.mock('./baseQuery', () => ({
-  baseQuery: () => async (args: any) => {
+vi.mock('@clarion-app/frontend-base', () => ({
+  createBackendConfig: () => ({ backend: { url: 'http://localhost:8000', user: { id: '', name: '', email: '' } }, updateFrontend: () => {} }),
+  createBaseQuery: () => async (args: any) => {
     if (typeof args === 'string') {
       if (args === '/server') return { data: mockServers };
       if (args === '/user-setting') return { data: mockUserSetting };

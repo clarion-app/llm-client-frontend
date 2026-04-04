@@ -10,8 +10,9 @@ vi.mock('.', () => ({
   },
 }));
 
-vi.mock('./baseQuery', () => ({
-  baseQuery: () => async (args: any) => {
+vi.mock('@clarion-app/frontend-base', () => ({
+  createBackendConfig: () => ({ backend: { url: 'http://localhost:8000', user: { id: '', name: '', email: '' } }, updateFrontend: () => {} }),
+  createBaseQuery: () => async (args: any) => {
     lastRequest = args;
     return { data: { success: true } };
   },

@@ -1,10 +1,11 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { baseQuery } from './baseQuery';
+import { createBaseQuery } from '@clarion-app/frontend-base';
+import { backend } from './config';
 import { ConversationType } from './types';
 
 export const conversationApi = createApi({
   reducerPath: 'llm-client-conversationApi',
-  baseQuery: baseQuery(),
+  baseQuery: createBaseQuery({ routePrefix: '/api/clarion-app/llm-client', backendConfig: backend }),
   tagTypes: ['Conversation'],
   endpoints: (builder) => ({
     getConversations: builder.query({

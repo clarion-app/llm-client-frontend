@@ -15,8 +15,9 @@ vi.mock('.', () => ({
 let mockMutationResult = { data: { success: true } };
 let capturedArgs: any = null;
 
-vi.mock('./baseQuery', () => ({
-  baseQuery: () => async (args: any) => {
+vi.mock('@clarion-app/frontend-base', () => ({
+  createBackendConfig: () => ({ backend: { url: 'http://localhost:8000', user: { id: '', name: '', email: '' } }, updateFrontend: () => {} }),
+  createBaseQuery: () => async (args: any) => {
     capturedArgs = args;
     // Simulate network delay for in-flight testing
     await new Promise((r) => setTimeout(r, 50));

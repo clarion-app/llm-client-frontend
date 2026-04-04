@@ -11,8 +11,9 @@ vi.mock('.', () => ({
 
 let capturedRequests: any[] = [];
 
-vi.mock('./baseQuery', () => ({
-  baseQuery: () => async (args: any) => {
+vi.mock('@clarion-app/frontend-base', () => ({
+  createBackendConfig: () => ({ backend: { url: 'http://localhost:8000', user: { id: '', name: '', email: '' } }, updateFrontend: () => {} }),
+  createBaseQuery: () => async (args: any) => {
     capturedRequests.push(args);
     if (typeof args === 'string' && args === '/user-setting') {
       return { data: { server_id: 'srv-1', model: 'gpt-4' } };

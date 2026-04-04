@@ -12,8 +12,9 @@ vi.mock('.', () => ({
   },
 }));
 
-vi.mock('./baseQuery', () => ({
-  baseQuery: () => async () => ({ data: [] }),
+vi.mock('@clarion-app/frontend-base', () => ({
+  createBackendConfig: () => ({ backend: { url: 'http://localhost:8000', user: { id: '', name: '', email: '' } }, updateFrontend: () => {} }),
+  createBaseQuery: () => async () => ({ data: [] }),
 }));
 
 const { default: Message } = await import('./Message');

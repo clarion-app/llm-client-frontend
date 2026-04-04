@@ -1,10 +1,11 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { baseQuery } from './baseQuery';
+import { createBaseQuery } from '@clarion-app/frontend-base';
+import { backend } from './config';
 import { UserSettingType } from './types';
 
 export const userSettingApi = createApi({
   reducerPath: 'llm-client-userSettingApi',
-  baseQuery: baseQuery(),
+  baseQuery: createBaseQuery({ routePrefix: '/api/clarion-app/llm-client', backendConfig: backend }),
   tagTypes: ['UserSetting'],
   endpoints: (builder) => ({
     getUserSetting: builder.query<UserSettingType, null>({

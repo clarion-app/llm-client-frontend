@@ -1,10 +1,11 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { baseQuery } from './baseQuery';
+import { createBaseQuery } from '@clarion-app/frontend-base';
+import { backend } from './config';
 import { ServerType } from './types';
 
 export const serverApi = createApi({
   reducerPath: 'llm-client-serverApi',
-  baseQuery: baseQuery(),
+  baseQuery: createBaseQuery({ routePrefix: '/api/clarion-app/llm-client', backendConfig: backend }),
   tagTypes: ['LLMServer'],
   endpoints: (builder) => ({
     getServers: builder.query({
