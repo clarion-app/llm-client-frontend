@@ -264,11 +264,6 @@ const Conversation = (props: ConversationPropsType) => {
           }
         }}
       ></textarea>
-      <button
-        className="button is-primary mt-2"
-        onClick={() => {
-          updateConversation(true);
-        }}>Command</button>
       <div ref={messagesEndRef} />
     </div>
   );
