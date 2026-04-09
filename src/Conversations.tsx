@@ -28,9 +28,16 @@ const Conversations = () => {
         className="border-b border-gray-200 py-2"
         onClick={() => navigate(`/clarion-app/llm-client/conversations/${conversation.id}`)}
         >
-          <h3 className="text-lg font-semibold">
-            {conversation.title || "Conversation"}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold">
+              {conversation.title || "Conversation"}
+            </h3>
+            {conversation.channel && conversation.channel !== 'web' && (
+              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                {conversation.channel}
+              </span>
+            )}
+          </div>
           <p>{conversation.character}</p>
       </div>
     )

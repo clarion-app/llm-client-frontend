@@ -20,6 +20,7 @@ export interface ConversationType extends LaravelModelType {
   server_id: string | null;
   model: string | null;
   character: string;
+  channel?: string;
 }
 
 export interface ServerType extends LaravelModelType {
