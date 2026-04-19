@@ -31,6 +31,7 @@ export interface WebSocketMessageType {
   message_id: string;
   conversation_id: string;
   reply: string;
+  tool_data?: string;
 }
 
 const Conversation = (props: ConversationPropsType) => {
@@ -89,6 +90,7 @@ const Conversation = (props: ConversationPropsType) => {
           const msg: MessageType = {
             id: message.message_id,
             content: message.reply,
+            tool_data: message.tool_data || null,
             conversation_id: message.conversation_id,
             role: "Assistant",
             user: "Assistant",

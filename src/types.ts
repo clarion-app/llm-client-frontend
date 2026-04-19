@@ -8,6 +8,7 @@ export interface LanguageModelType extends LaravelModelType {
 export interface MessageType extends LaravelModelType {
   conversation_id: string;
   content: string;
+  tool_data: string | null;
   role: string;
   user: string;
   streaming: boolean;

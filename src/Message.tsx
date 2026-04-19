@@ -71,6 +71,14 @@ const Message = (props: MessagePropsType) => {
         <pre className="p-2 m-1" style={{backgroundColor: "#FAFAFA", overflow: "auto"}}>
           {props.content}
         </pre>}
+        {props.tool_data && (
+          <div className="mt-4 p-2" style={{backgroundColor: "#F0F0F0", borderRadius: "4px"}}>
+            <h4 className="font-bold mb-2">Tool Data:</h4>
+            <pre style={{whiteSpace: "pre-wrap", wordWrap: "break-word"}}>
+              {JSON.stringify(props.tool_data, null, 2)}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   );
