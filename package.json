@@ -43,7 +43,8 @@
                 "llmClientMessageApi",
                 "llmClientModelApi",
                 "llmClientServerApi",
-                "llmClientUserSettingApi"
+                "llmClientUserSettingApi",
+                "llmClientRoleAssignmentApi"
             ],
             "routes": [
                 {

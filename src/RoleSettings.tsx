@@ -27,7 +27,12 @@ const RoleSettings = () => {
   const [setRoleAssignment] = useSetRoleAssignmentMutation();
   const [clearRoleAssignment] = useClearRoleAssignmentMutation();
 
-  const [selectedOverrides, setSelectedOverrides] = useState<Record<string, { server_id: string; model: string }>>({});
+  const [selectedUserOverrides, setSelectedUserOverrides] = useState<
+    Record<string, { server_id: string; model: string }>
+  >({});
+  const [selectedInstallationOverrides, setSelectedInstallationOverrides] = useState<
+    Record<string, { server_id: string; model: string }>
+  >({});
 
   const isLoading = serversLoading || modelsLoading || assignmentsLoading;
 
@@ -59,16 +64,17 @@ const RoleSettings = () => {
     return <div className="container"><p>Loading...</p></div>;
   }
 
-  const handleSelectChange = (role: string, value: string) => {
+  // ---- User-scope handlers ----
+  const handleUserSelectChange = (role: string, value: string) => {
     const [serverId, modelName] = value.split(':');
-    setSelectedOverrides((prev) => ({
+    setSelectedUserOverrides((prev) => ({
       ...prev,
       [role]: { server_id: serverId, model: modelName },
     }));
   };
 
-  const handleSaveRole = async (role: string) => {
-    const override = selectedOverrides[role];
+  const handleSaveUserRole = async (role: string) => {
+    const override = selectedUserOverrides[role];
     if (!override) return;
     await setRoleAssignment({
       role: role as 'inference' | 'embedding' | 'image',
@@ -78,12 +84,44 @@ const RoleSettings = () => {
     }).unwrap();
   };
 
-  const handleClearRole = async (role: string) => {
+  const handleClearUserRole = async (role: string) => {
     await clearRoleAssignment({
       role: role as 'inference' | 'embedding' | 'image',
       scope: 'user',
     }).unwrap();
-    setSelectedOverrides((prev) => {
+    setSelectedUserOverrides((prev) => {
+      const next = { ...prev };
+      delete next[role];
+      return next;
+    });
+  };
+
+  // ---- Installation-scope handlers ----
+  const handleInstallationSelectChange = (role: string, value: string) => {
+    const [serverId, modelName] = value.split(':');
+    setSelectedInstallationOverrides((prev) => ({
+      ...prev,
+      [role]: { server_id: serverId, model: modelName },
+    }));
+  };
+
+  const handleSaveInstallationRole = async (role: string) => {
+    const override = selectedInstallationOverrides[role];
+    if (!override) return;
+    await setRoleAssignment({
+      role: role as 'inference' | 'embedding' | 'image',
+      scope: 'installation',
+      server_id: override.server_id,
+      model: override.model,
+    }).unwrap();
+  };
+
+  const handleClearInstallationRole = async (role: string) => {
+    await clearRoleAssignment({
+      role: role as 'inference' | 'embedding' | 'image',
+      scope: 'installation',
+    }).unwrap();
+    setSelectedInstallationOverrides((prev) => {
       const next = { ...prev };
       delete next[role];
       return next;
@@ -94,18 +132,98 @@ const RoleSettings = () => {
     return modelsByServer[serverId] || [];
   };
 
-  const renderRoleSection = (roleKey: string, descriptor: RoleDescriptor) => {
-    const { effective, user_assignment } = descriptor;
-    const label = ROLE_LABELS[roleKey] || roleKey;
+  // ---- Build the options list (shared) ----
+  const buildOptions = () => {
+    const elements: JSX.Element[] = [];
+    elements.push(<option key="" value="">-- Select a model --</option>);
+    for (const server of servers || []) {
+      const models = getOptionsForServer(server.id!);
+      if (models.length === 0) continue;
+      elements.push(
+        <optgroup key={server.id} label={server.name}>
+          {models.map((model: LanguageModelType) => (
+            <option key={`${server.id}:${model.name}`} value={`${server.id}:${model.name}`}>
+              {model.name}
+            </option>
+          ))}
+        </optgroup>
+      );
+    }
+    return elements;
+  };
 
-    const currentServerId = user_assignment?.server_id || selectedOverrides[roleKey]?.server_id || '';
-    const currentModel = user_assignment?.model || selectedOverrides[roleKey]?.model || '';
+  // ---- Render one scope column (user or installation) ----
+  const renderScopeColumn = (
+    roleKey: string,
+    scope: 'user' | 'installation',
+    assignment: { server_id: string; model: string } | null,
+    label: string,
+  ) => {
+    const selectedMap = scope === 'user' ? selectedUserOverrides : selectedInstallationOverrides;
+    const handleSelectChange = scope === 'user'
+      ? handleUserSelectChange
+      : handleInstallationSelectChange;
+    const handleSave = scope === 'user'
+      ? handleSaveUserRole
+      : handleSaveInstallationRole;
+    const handleClear = scope === 'user'
+      ? handleClearUserRole
+      : handleClearInstallationRole;
+
+    const currentServerId = assignment?.server_id || selectedMap[roleKey]?.server_id || '';
+    const currentModel = assignment?.model || selectedMap[roleKey]?.model || '';
+
+    return (
+      <div className="column is-half">
+        <p className="heading">{label}</p>
+
+        {assignment === null && scope === 'user' ? (
+          <p className="help">Using installation default (if set).</p>
+        ) : assignment === null && scope === 'installation' ? (
+          <p className="help">Not set.</p>
+        ) : null}
+
+        <div className="field">
+          <div className="select is-fullwidth">
+            <select
+              value={`${currentServerId}:${currentModel}`}
+              onChange={(e) => handleSelectChange(roleKey, e.target.value)}
+            >
+              {buildOptions()}
+            </select>
+          </div>
+        </div>
+
+        <div className="field is-grouped">
+          <button
+            className="button is-primary is-small"
+            disabled={!selectedMap[roleKey] || !selectedMap[roleKey].server_id}
+            onClick={() => handleSave(roleKey)}
+          >
+            Save
+          </button>
+          {assignment && (
+            <button
+              className="button is-warning is-small"
+              onClick={() => handleClear(roleKey)}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderRoleSection = (roleKey: string, descriptor: RoleDescriptor) => {
+    const { effective, user_assignment, installation_assignment } = descriptor;
+    const label = ROLE_LABELS[roleKey] || roleKey;
 
     return (
       <div key={roleKey} className="box mb-4">
         <h2 className="subtitle">{label}</h2>
 
-        <div className="content">
+        <div className="content mb-3">
           {effective.status === 'unassigned' ? (
             <p>
               <strong>Unassigned.</strong> {WHAT_BREAKS[roleKey]}
@@ -125,47 +243,9 @@ const RoleSettings = () => {
           )}
         </div>
 
-        <div className="field">
-          <label className="label">Assign model</label>
-          <div className="select is-fullwidth">
-            <select
-              value={`${currentServerId}:${currentModel}`}
-              onChange={(e) => handleSelectChange(roleKey, e.target.value)}
-            >
-              <option value="">-- Select a model --</option>
-              {servers?.map((server: ServerType) => {
-                const models = getOptionsForServer(server.id!);
-                if (models.length === 0) return null;
-                return (
-                  <optgroup key={server.id} label={server.name}>
-                    {models.map((model: LanguageModelType) => (
-                      <option key={`${server.id}:${model.name}`} value={`${server.id}:${model.name}`}>
-                        {model.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                );
-              })}
-            </select>
-          </div>
-        </div>
-
-        <div className="field is-grouped">
-          <button
-            className="button is-primary"
-            disabled={!selectedOverrides[roleKey] || !selectedOverrides[roleKey].server_id}
-            onClick={() => handleSaveRole(roleKey)}
-          >
-            Save
-          </button>
-          {user_assignment && (
-            <button
-              className="button is-warning"
-              onClick={() => handleClearRole(roleKey)}
-            >
-              Clear override
-            </button>
-          )}
+        <div className="columns">
+          {renderScopeColumn(roleKey, 'user', user_assignment, 'Your override')}
+          {renderScopeColumn(roleKey, 'installation', installation_assignment, 'Installation default')}
         </div>
       </div>
     );
