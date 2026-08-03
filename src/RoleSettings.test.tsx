@@ -23,6 +23,7 @@ vi.mock('@clarion-app/frontend-base', () => ({
   createBaseQuery: () => async (args: any) => {
     if (typeof args === 'string') {
       if (args === '/server') return { data: mockServers };
+      if (args === '/model') return { data: mockModels };
       if (args === '/role-assignment') return { data: mockRoleAssignments };
       if (args.match(/\/server\/.+\/model/)) return { data: mockModels };
     }
@@ -161,9 +162,9 @@ describe('RoleSettings', () => {
 
     await waitFor(() => {
       // All three roles should be rendered.
-      expect(screen.getByText(/inference/i)).toBeTruthy();
-      expect(screen.getByText(/embedding/i)).toBeTruthy();
-      expect(screen.getByText(/image/i)).toBeTruthy();
+      expect(screen.getByText('Inference')).toBeTruthy();
+      expect(screen.getByText('Embedding')).toBeTruthy();
+      expect(screen.getByText('Image')).toBeTruthy();
     });
   });
 
@@ -184,9 +185,12 @@ describe('RoleSettings', () => {
     );
 
     await waitFor(() => {
-      // The resolved inference role should show the model name.
-      expect(screen.getByText('gpt-4')).toBeTruthy();
+      // The resolved inference role should show the model name in the effective display.
+      expect(screen.getByText(/Effective model:/)).toBeTruthy();
     });
+    // gpt-4 appears as an option in the select dropdowns
+    const gpt4Elements = screen.getAllByText('gpt-4');
+    expect(gpt4Elements.length).toBeGreaterThan(0);
   });
 
   it('shows unassigned state messaging for unassigned role', async () => {

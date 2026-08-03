@@ -42,3 +42,42 @@ export interface UserSettingType {
   server_id: string | null;
   model: string | null;
 }
+
+// Role assignment types
+export interface RoleEffective {
+  status: 'resolved' | 'unassigned' | 'broken';
+  scope: 'user' | 'installation' | null;
+  server: { id: string; name: string } | null;
+  model: string | null;
+  reason: string | null;
+}
+
+export interface RoleAssignment {
+  server_id: string;
+  model: string;
+}
+
+export interface RoleDescriptor {
+  role: 'inference' | 'embedding' | 'image';
+  effective: RoleEffective;
+  user_assignment: RoleAssignment | null;
+  installation_assignment: RoleAssignment | null;
+}
+
+export type RoleAssignmentsType = {
+  inference: RoleDescriptor;
+  embedding: RoleDescriptor;
+  image: RoleDescriptor;
+};
+
+export interface SetRoleAssignmentRequest {
+  role: 'inference' | 'embedding' | 'image';
+  scope: 'user' | 'installation';
+  server_id: string;
+  model: string;
+}
+
+export interface ClearRoleAssignmentRequest {
+  role: 'inference' | 'embedding' | 'image';
+  scope: 'user' | 'installation';
+}
