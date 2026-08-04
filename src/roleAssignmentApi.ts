@@ -6,6 +6,8 @@ import {
   RoleDescriptor,
   SetRoleAssignmentRequest,
   ClearRoleAssignmentRequest,
+  RoleTestResultType,
+  TestRoleRequest,
 } from './types';
 
 export const roleAssignmentApi = createApi({
@@ -33,6 +35,15 @@ export const roleAssignmentApi = createApi({
       }),
       invalidatesTags: ['RoleAssignment'],
     }),
+    // Read-only exercise of the effective model — no cache invalidation,
+    // since the endpoint writes nothing (FR-024a).
+    testRole: builder.mutation<RoleTestResultType, TestRoleRequest>({
+      query: (request) => ({
+        url: '/role-assignment/test',
+        method: 'POST',
+        body: request,
+      }),
+    }),
   }),
 });
 
@@ -40,4 +51,5 @@ export const {
   useGetRoleAssignmentsQuery,
   useSetRoleAssignmentMutation,
   useClearRoleAssignmentMutation,
+  useTestRoleMutation,
 } = roleAssignmentApi;

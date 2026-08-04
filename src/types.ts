@@ -52,9 +52,13 @@ export interface RoleTestResultType {
   role: string;
   outcome: 'pass' | 'fail' | 'not_testable' | 'no_effective_model';
   model: string | null;
-  server: string | null;
-  message: string;
+  server: { id: string; name: string } | null;
+  message: string | null;
   duration_ms: number | null;
+}
+
+export interface TestRoleRequest {
+  role: 'inference' | 'embedding' | 'image';
 }
 
 export interface ApiCallConfirmationType {

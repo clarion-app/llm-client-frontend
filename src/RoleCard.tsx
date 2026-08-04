@@ -1,8 +1,9 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ModelPicker } from './ModelPicker';
 import { RoleStatusLine } from './RoleStatusLine';
 import { InstallationDisclosure } from './InstallationDisclosure';
 import { ConfirmDialog } from './ConfirmDialog';
+import { TestRoleButton } from './TestRoleButton';
 import { RoleDescriptor, RoleEffective } from './types';
 import { useSetRoleAssignmentMutation, useClearRoleAssignmentMutation } from './roleAssignmentApi';
 
@@ -35,6 +36,11 @@ export function RoleCard({ roleDescriptor }: RoleCardProps): React.ReactElement 
   const [setRoleAssignment] = useSetRoleAssignmentMutation();
   const [clearRoleAssignment] = useClearRoleAssignmentMutation();
   const [showClearDialog, setShowClearDialog] = useState(false);
+  const modelPickerRef = useRef<HTMLDivElement>(null);
+
+  const handleReassignBroken = useCallback(() => {
+    modelPickerRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, []);
 
   // Compute the fallback statement when clearing a user-scope assignment
   const clearFallbackStatement = useMemo(() => {
@@ -96,8 +102,25 @@ export function RoleCard({ roleDescriptor }: RoleCardProps): React.ReactElement 
         {role} Model
       </h3>
 
-      {/* Status line — shows model/server/scope or consequence message */}
-      <RoleStatusLine effective={effective} role={role} />
+      {/* Status line — shows model/server/scope, consequence message, or
+          (when broken) the surviving assignment's model/server and a way
+          to jump straight to reassigning (US3-3). */}
+      <RoleStatusLine
+        effective={effective}
+        role={role}
+        userAssignment={user_assignment}
+        installationAssignment={installation_assignment}
+        onReassignBroken={handleReassignBroken}
+      />
+
+      {/* Test the effective model with a single bounded call (US3-4). Only
+          shown once a model is actually resolved — broken/unassigned always
+          report no_effective_model, so there is nothing useful to exercise. */}
+      {effective.status === 'resolved' && (
+        <div style={{ marginTop: '0.5rem' }}>
+          <TestRoleButton role={role} roleDescriptor={roleDescriptor} />
+        </div>
+      )}
 
       {/* Scope indicator — visually distinct for user vs installation (FR-006) */}
       {effective.status === 'resolved' && (
@@ -145,7 +168,7 @@ export function RoleCard({ roleDescriptor }: RoleCardProps): React.ReactElement 
       )}
 
       {/* Model picker for assignment */}
-      <div style={{ marginTop: '0.75rem' }}>
+      <div ref={modelPickerRef} style={{ marginTop: '0.75rem' }}>
         <ModelPicker
           onSelect={handleSelect}
           selectedValue={

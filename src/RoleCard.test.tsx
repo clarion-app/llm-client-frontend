@@ -665,4 +665,145 @@ describe('RoleCard', () => {
       });
     });
   });
+
+  /* -----------------------------------------------------------------
+   * Broken state — names the missing model AND the server it was
+   * assigned on, plus a consequence sentence, and offers reassignment
+   * from the card (FR-006, FR-007, FR-008, US3-3).
+   * ----------------------------------------------------------------- */
+  describe('broken state (US3-3)', () => {
+    function buildBrokenRole(role: string, overrides: Record<string, any> = {}): any {
+      return {
+        role,
+        effective: {
+          status: 'broken',
+          scope: 'user',
+          server: null,
+          model: 'vanished-model',
+          reason: 'server deleted',
+        },
+        user_assignment: { server_id: 'srv-old-123', model: 'vanished-model' },
+        installation_assignment: null,
+        ...overrides,
+      };
+    }
+
+    it('names the missing model', async () => {
+      mockRoleAssignments = {
+        inference: buildBrokenRole('inference'),
+        embedding: buildUnassignedRole('embedding'),
+        image: buildUnassignedRole('image'),
+      };
+
+      const store = createTestStore();
+      render(
+        <Provider store={store}>
+          <RoleCard roleDescriptor={mockRoleAssignments.inference} />
+        </Provider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('role-status-broken')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText(/vanished-model/)).toBeInTheDocument();
+    });
+
+    it('names the server the broken assignment was on', async () => {
+      const broken = buildBrokenRole('embedding');
+
+      const store = createTestStore();
+      render(
+        <Provider store={store}>
+          <RoleCard roleDescriptor={broken} />
+        </Provider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('role-status-broken')).toBeInTheDocument();
+      });
+
+      // effective.server is null once broken (the server row is gone), so
+      // the card must fall back to the surviving assignment's server_id.
+      expect(screen.getByText(/srv-old-123/)).toBeInTheDocument();
+    });
+
+    it('states the consequence of the role staying broken (FR-008)', async () => {
+      const broken = buildBrokenRole('inference');
+
+      const store = createTestStore();
+      render(
+        <Provider store={store}>
+          <RoleCard roleDescriptor={broken} />
+        </Provider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('role-status-broken')).toBeInTheDocument();
+      });
+
+      // Same consequence family as the unassigned case — a broken role is
+      // just as unusable as an unassigned one until it is reassigned.
+      expect(screen.getByText(/conversations and agents cannot run/i)).toBeInTheDocument();
+    });
+
+    it('offers reassignment directly from the broken card (FR-007)', async () => {
+      const broken = buildBrokenRole('embedding');
+
+      const store = createTestStore();
+      render(
+        <Provider store={store}>
+          <RoleCard roleDescriptor={broken} />
+        </Provider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('role-status-broken')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('reassign-broken-embedding')).toBeInTheDocument();
+    });
+
+    it('reports as broken, not unassigned, even with zero servers configured (edge case)', async () => {
+      // Simulate the edge case where the assignment survives but there is
+      // nothing left to resolve it against anywhere in the system: no
+      // effective.server, and only the installation-scope assignment
+      // metadata (also just an id — nothing to look up).
+      const brokenNoServers = {
+        role: 'image',
+        effective: {
+          status: 'broken',
+          scope: 'installation',
+          server: null,
+          model: 'old-image-model',
+          reason: 'server deleted',
+        },
+        user_assignment: null,
+        installation_assignment: { server_id: 'srv-gone', model: 'old-image-model' },
+      };
+
+      const store = createTestStore();
+      render(
+        <Provider store={store}>
+          <RoleCard roleDescriptor={brokenNoServers} />
+        </Provider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('role-status-broken')).toBeInTheDocument();
+      });
+
+      // Must not be rendered as (or collapse into) the unassigned state.
+      expect(screen.queryByTestId('role-status-unassigned')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('No image model assigned — image generation features will not be available.'),
+      ).not.toBeInTheDocument();
+
+      // Still names the model and the (installation-scope) server id, and
+      // still offers reassignment.
+      expect(screen.getByText(/old-image-model/)).toBeInTheDocument();
+      expect(screen.getByText(/srv-gone/)).toBeInTheDocument();
+      expect(screen.getByTestId('reassign-broken-image')).toBeInTheDocument();
+    });
+  });
 });
