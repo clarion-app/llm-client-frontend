@@ -51,11 +51,26 @@ const RoleSettings = () => {
     return <div className="container"><p>Loading...</p></div>;
   }
 
+  // FR-027: say what is missing and where to go, rather than rendering three
+  // empty dropdowns. Both halves of the edge case are handled — no servers at
+  // all, and servers that have not reported any models yet.
   if (!servers || servers.length === 0) {
     return (
       <div className="container">
         <h1 className="title">Model Roles</h1>
         <p>No servers configured. Please add a server first.</p>
+      </div>
+    );
+  }
+
+  if (!allModels || allModels.length === 0) {
+    return (
+      <div className="container">
+        <h1 className="title">Model Roles</h1>
+        <p>
+          No models are known on any configured server yet. Refresh the models on a server
+          before assigning roles.
+        </p>
       </div>
     );
   }
@@ -170,8 +185,11 @@ const RoleSettings = () => {
       ? handleClearUserRole
       : handleClearInstallationRole;
 
-    const currentServerId = assignment?.server_id || selectedMap[roleKey]?.server_id || '';
-    const currentModel = assignment?.model || selectedMap[roleKey]?.model || '';
+    // A pending selection wins over the saved assignment: the <select> is
+    // controlled, so reading the assignment first would snap the dropdown back
+    // to the saved value the moment the user picked anything else.
+    const currentServerId = selectedMap[roleKey]?.server_id || assignment?.server_id || '';
+    const currentModel = selectedMap[roleKey]?.model || assignment?.model || '';
 
     return (
       <div className="column is-half">
@@ -229,8 +247,11 @@ const RoleSettings = () => {
               <strong>Unassigned.</strong> {WHAT_BREAKS[roleKey]}
             </p>
           ) : effective.status === 'broken' ? (
+            /* FR-013: name the model that vanished, and say what that costs. */
             <p>
-              <strong>Broken.</strong> {effective.reason || 'The assigned model is no longer available.'}
+              <strong>Broken.</strong> The assigned model{effective.model ? ` "${effective.model}"` : ''} is
+              no longer available{effective.reason ? ` (${effective.reason})` : ''}
+              {effective.scope ? ` — assigned at ${effective.scope} scope` : ''}. {WHAT_BREAKS[roleKey]}
             </p>
           ) : (
             <p>

@@ -69,7 +69,7 @@
                 },
                 {
                     "path": "/clarion-app/llm-client/settings",
-                    "element": "<UserSettings />"
+                    "element": "<RoleSettings />"
                 }
             ],
             "menu": {

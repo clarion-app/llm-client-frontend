@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 
@@ -14,6 +14,8 @@ vi.mock('.', () => ({
 let mockServers: any[] = [];
 let mockModels: any[] = [];
 let mockRoleAssignments: any = null;
+/** Every non-GET request the component issued, in order. */
+let mockRequests: Array<{ url: string; method: string; body: any }> = [];
 
 vi.mock('@clarion-app/frontend-base', () => ({
   createBackendConfig: () => ({
@@ -26,6 +28,11 @@ vi.mock('@clarion-app/frontend-base', () => ({
       if (args === '/model') return { data: mockModels };
       if (args === '/role-assignment') return { data: mockRoleAssignments };
       if (args.match(/\/server\/.+\/model/)) return { data: mockModels };
+    }
+    if (args?.method) {
+      mockRequests.push({ url: args.url, method: args.method, body: args.body });
+      const role = args.body?.role;
+      return { data: role ? mockRoleAssignments?.[role] ?? null : null };
     }
     return { data: mockRoleAssignments || {} };
   },
@@ -114,9 +121,11 @@ function buildMockRoleAssignments(
 
 describe('RoleSettings', () => {
   beforeEach(() => {
+    cleanup();
     mockServers = [];
     mockModels = [];
     mockRoleAssignments = null;
+    mockRequests = [];
   });
 
   it('renders loading state', () => {
@@ -230,17 +239,91 @@ describe('RoleSettings', () => {
       expect(screen.getByText(/no servers/i)).toBeTruthy();
     });
 
-    // Should not render empty <select> elements.
-    const selects = container.querySelectorAll('select');
-    for (const select of selects) {
-      const options = select.querySelectorAll('option');
-      // If there are selects, they should have options (not be empty).
-      // With no servers, the component should show an empty state message
-      // instead of rendering selects at all.
-    }
+    // FR-027: no empty controls at all, not merely controls with no options.
+    expect(container.querySelectorAll('select').length).toBe(0);
   });
 
-  it('setting a role updates effective source via tag invalidation', async () => {
+  it('renders a no-models empty state instead of empty selects', async () => {
+    mockServers = [
+      { id: 'srv-1', name: 'Local Server', server_url: 'https://llm.local' },
+    ];
+    mockModels = [];
+    mockRoleAssignments = buildMockRoleAssignments('unassigned', 'unassigned', 'unassigned');
+
+    const store = createTestStore();
+    const { container } = render(
+      <Provider store={store}>
+        <RoleSettings />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/no models are known/i)).toBeTruthy();
+    });
+
+    expect(container.querySelectorAll('select').length).toBe(0);
+  });
+
+  it('names the vanished model and what breaks for a broken role', async () => {
+    mockServers = [
+      { id: 'srv-1', name: 'Local Server', server_url: 'https://llm.local' },
+    ];
+    mockModels = [{ id: 'lm-1', server_id: 'srv-1', name: 'gpt-4' }];
+    mockRoleAssignments = buildMockRoleAssignments('broken', 'unassigned', 'unassigned');
+
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <RoleSettings />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      // FR-013: the model that vanished is named, with the reason and scope...
+      expect(screen.getByText(/old-model/)).toBeTruthy();
+    });
+    const broken = screen.getByText(/old-model/).textContent ?? '';
+    expect(broken).toMatch(/server deleted/);
+    expect(broken).toMatch(/installation/);
+    // ...and FR-025: what stops working as a result.
+    expect(broken).toMatch(/Starting a new conversation/);
+  });
+
+  it('shows the model the user just picked, not the saved one', async () => {
+    mockServers = [
+      { id: 'srv-1', name: 'Local Server', server_url: 'https://llm.local' },
+    ];
+    mockModels = [
+      { id: 'lm-1', server_id: 'srv-1', name: 'gpt-4' },
+      { id: 'lm-2', server_id: 'srv-1', name: 'llama-3-70b' },
+    ];
+    // inference already has a saved user assignment of srv-1:gpt-4.
+    mockRoleAssignments = buildMockRoleAssignments('resolved', 'unassigned', 'unassigned');
+
+    const store = createTestStore();
+    const { container } = render(
+      <Provider store={store}>
+        <RoleSettings />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('select').length).toBeGreaterThan(0);
+    });
+
+    const inferenceUserSelect = container.querySelectorAll('select')[0] as HTMLSelectElement;
+    expect(inferenceUserSelect.value).toBe('srv-1:gpt-4');
+
+    fireEvent.change(inferenceUserSelect, { target: { value: 'srv-1:llama-3-70b' } });
+
+    // SC-008 is one selection and one save: the selection has to survive the
+    // re-render, or the user cannot see what they are about to save.
+    await waitFor(() => {
+      expect(inferenceUserSelect.value).toBe('srv-1:llama-3-70b');
+    });
+  });
+
+  it('setting a role PUTs the assignment and updates the effective source', async () => {
     mockServers = [
       { id: 'srv-1', name: 'Local Server', server_url: 'https://llm.local' },
     ];
@@ -251,33 +334,53 @@ describe('RoleSettings', () => {
     mockRoleAssignments = buildMockRoleAssignments('resolved', 'unassigned', 'unassigned');
 
     const store = createTestStore();
-    render(
+    const { container } = render(
       <Provider store={store}>
         <RoleSettings />
       </Provider>
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/inference/i)).toBeTruthy();
+      expect(container.querySelectorAll('select').length).toBe(6);
     });
 
-    // Simulate setting a role — the mutation should invalidate the
-    // RoleAssignment tag, triggering a refetch of getRoleAssignments.
-    const newAssignments = buildMockRoleAssignments('resolved', 'resolved', 'unassigned');
-    mockRoleAssignments = newAssignments;
+    // Embedding is the second role section: its user-scope select is index 2.
+    const embeddingUserSelect = container.querySelectorAll('select')[2] as HTMLSelectElement;
+    fireEvent.change(embeddingUserSelect, {
+      target: { value: 'srv-1:text-embedding-3-small' },
+    });
 
-    // After the mutation, the embedding role should show as resolved.
-    // The RTK Query tag invalidation handles the refetch automatically.
+    // The server now reports embedding as resolved; the tag invalidation the
+    // mutation declares is what has to bring that back into the view.
+    mockRoleAssignments = buildMockRoleAssignments('resolved', 'resolved', 'unassigned');
+
+    const saveButtons = screen.getAllByText('Save');
+    fireEvent.click(saveButtons[2]);
+
+    await waitFor(() => {
+      expect(mockRequests).toContainEqual({
+        url: '/role-assignment',
+        method: 'PUT',
+        body: {
+          role: 'embedding',
+          scope: 'user',
+          server_id: 'srv-1',
+          model: 'text-embedding-3-small',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      // Two roles resolved now (inference and embedding), where there was one.
+      expect(screen.getAllByText(/Effective model:/).length).toBe(2);
+    });
   });
 
-  it('clearing a role updates effective source without page reload', async () => {
+  it('clearing a role DELETEs it and falls back without a page reload', async () => {
     mockServers = [
       { id: 'srv-1', name: 'Local Server', server_url: 'https://llm.local' },
     ];
-    mockModels = [
-      { id: 'lm-1', server_id: 'srv-1', name: 'gpt-4' },
-    ];
-    // Start with inference resolved.
+    mockModels = [{ id: 'lm-1', server_id: 'srv-1', name: 'gpt-4' }];
     mockRoleAssignments = buildMockRoleAssignments('resolved', 'unassigned', 'unassigned');
 
     const store = createTestStore();
@@ -288,13 +391,25 @@ describe('RoleSettings', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/inference/i)).toBeTruthy();
+      expect(screen.getAllByText(/Effective model:/).length).toBe(1);
     });
 
-    // After clearing, the role should fall back to installation or unassigned.
-    const clearedAssignments = buildMockRoleAssignments('unassigned', 'unassigned', 'unassigned');
-    mockRoleAssignments = clearedAssignments;
+    // After the clear the role resolves to nothing at either scope.
+    mockRoleAssignments = buildMockRoleAssignments('unassigned', 'unassigned', 'unassigned');
 
-    // The RTK Query tag invalidation handles the refetch automatically.
+    fireEvent.click(screen.getAllByText('Clear')[0]);
+
+    await waitFor(() => {
+      expect(mockRequests).toContainEqual({
+        url: '/role-assignment',
+        method: 'DELETE',
+        body: { role: 'inference', scope: 'user' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Effective model:/)).toBeNull();
+      expect(screen.getAllByText(/Unassigned\./).length).toBe(3);
+    });
   });
 });

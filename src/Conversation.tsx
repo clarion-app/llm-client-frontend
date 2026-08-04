@@ -11,9 +11,7 @@ import {
   useCreateMessageMutation,
   useGetMessagesQuery,
 } from "./messageApi";
-import { useGetModelsQuery } from "./modelApi";
-import { useGetServersQuery } from "./serverApi";
-import { useGetUserSettingQuery } from "./userSettingApi";
+import { useGetRoleAssignmentsQuery } from "./roleAssignmentApi";
 import { skipToken } from "@reduxjs/toolkit/query";
 import { backend } from ".";
 import { ConversationType, MessageType, ApiCallConfirmationType } from "./types";
@@ -42,11 +40,14 @@ const Conversation = (props: ConversationPropsType) => {
   );
   const { data: conversations, refetch: refetchConversations } =
     useGetConversationsQuery(null);
-  const { data: servers } = useGetServersQuery(null);
-  const { data: userSetting } = useGetUserSettingQuery(null);
-  const defaultServer = userSetting?.server_id || servers?.[0]?.id || null;
-  const { data: models } = useGetModelsQuery(defaultServer ?? skipToken);
-  const defaultModel = userSetting?.model || models?.[0]?.name || null;
+  // The conversational default is the effective inference role — the one place
+  // that choice lives now (063-model-roles). When it resolves to nothing, both
+  // values stay null and the backend answers with its own resolution or a 422;
+  // this screen no longer picks an arbitrary server/model on the user's behalf.
+  const { data: roleAssignments } = useGetRoleAssignmentsQuery(null);
+  const inference = roleAssignments?.inference?.effective;
+  const defaultServer = inference?.status === 'resolved' ? inference.server?.id ?? null : null;
+  const defaultModel = inference?.status === 'resolved' ? inference.model : null;
   const [createConversation] = useCreateConversationMutation();
   const [createCommand] = useCreateCommandConversationMutation();
   const [createMessage] = useCreateMessageMutation();
@@ -152,8 +153,8 @@ const Conversation = (props: ConversationPropsType) => {
         setConversationId(updateConversationId);
       } catch (err: any) {
         if (err?.status === 422) {
-          errorLog("No LLM server configured", err);
-          alert("No LLM server is configured. Please add a server first.");
+          errorLog("No inference model resolved for the conversation", err);
+          alert("No inference model is assigned. Choose one in LLM settings — or add a server first if there are none.");
         } else {
           errorLog("Failed to create conversation", err);
         }

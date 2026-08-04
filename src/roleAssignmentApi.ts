@@ -3,6 +3,7 @@ import { createBaseQuery } from '@clarion-app/frontend-base';
 import { backend } from './config';
 import {
   RoleAssignmentsType,
+  RoleDescriptor,
   SetRoleAssignmentRequest,
   ClearRoleAssignmentRequest,
 } from './types';
@@ -16,7 +17,7 @@ export const roleAssignmentApi = createApi({
       query: () => '/role-assignment',
       providesTags: ['RoleAssignment'],
     }),
-    setRoleAssignment: builder.mutation<RoleAssignmentsType, SetRoleAssignmentRequest>({
+    setRoleAssignment: builder.mutation<RoleDescriptor, SetRoleAssignmentRequest>({
       query: (request) => ({
         url: '/role-assignment',
         method: 'PUT',
@@ -24,7 +25,7 @@ export const roleAssignmentApi = createApi({
       }),
       invalidatesTags: ['RoleAssignment'],
     }),
-    clearRoleAssignment: builder.mutation<RoleAssignmentsType, ClearRoleAssignmentRequest>({
+    clearRoleAssignment: builder.mutation<RoleDescriptor, ClearRoleAssignmentRequest>({
       query: (request) => ({
         url: '/role-assignment',
         method: 'DELETE',
