@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGetServersQuery } from './serverApi';
 import { useGetServerStatusesQuery } from './serverStatusApi';
+import { useGetRoleAssignmentsQuery } from './roleAssignmentApi';
 import { ServerCard } from './ServerCard';
 import { ServerType, ServerStatusType } from './types';
 
@@ -15,10 +16,14 @@ interface ServersSectionProps {
  * - Each server card shows name, status badge, model count, and refresh button.
  * - Status data comes from the serverStatusApi (projected from events).
  * - FR-004: highlightedServerId highlights a specific server card.
+ * - Fetches role assignments once here and threads them into every
+ *   ServerCard, so each card's delete confirmation can name the roles
+ *   that server would break (FR-020) without re-querying per card.
  */
 export function ServersSection({ highlightedServerId }: ServersSectionProps = {}): React.ReactElement {
   const { data: servers = [], isLoading: isLoadingServers } = useGetServersQuery(null);
   const { data: statuses = [] } = (useGetServerStatusesQuery() as { data: any[] });
+  const { data: roleAssignments = null } = useGetRoleAssignmentsQuery(null);
 
   if (isLoadingServers) {
     return (
@@ -55,6 +60,7 @@ export function ServersSection({ highlightedServerId }: ServersSectionProps = {}
               server={server}
               status={statusMap.get(serverId) ?? null}
               isHighlighted={serverId === highlightedServerId}
+              roleAssignments={roleAssignments}
             />
           );
         })}

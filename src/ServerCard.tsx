@@ -1,12 +1,56 @@
-import React, { useCallback, useState } from 'react';
-import { ServerType, ServerStatusType, ConnectionStatus, RefreshOutcome } from './types';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ServerType, ServerStatusType, ConnectionStatus, RefreshOutcome, RoleAssignmentsType } from './types';
 import { useRefreshServerModelsMutation } from './serverStatusApi';
+import { useDeleteServerMutation } from './serverApi';
+import { ConfirmDialog } from './ConfirmDialog';
+import { ServerEditForm } from './ServerEditForm';
 
 interface ServerCardProps {
   server: ServerType;
   status: ServerStatusType | null;
   isHighlighted?: boolean;
   onEditToken?: (serverId: string) => void;
+  roleAssignments?: RoleAssignmentsType | null;
+}
+
+const ROLE_ORDER = ['inference', 'embedding', 'image'] as const;
+
+/**
+ * Roles this server's deletion would break: any role whose personal
+ * assignment or installation default points at this server's id. Deriving
+ * this from `user_assignment`/`installation_assignment` (rather than
+ * `effective`) is what catches a role whose installation default lives on
+ * this server even while a different server is currently in effect.
+ */
+function rolesBrokenByDeleting(
+  serverId: string | undefined,
+  roleAssignments: RoleAssignmentsType | null | undefined,
+): Array<(typeof ROLE_ORDER)[number]> {
+  if (!serverId || !roleAssignments) return [];
+  return ROLE_ORDER.filter((role) => {
+    const descriptor = roleAssignments[role];
+    return (
+      descriptor.user_assignment?.server_id === serverId ||
+      descriptor.installation_assignment?.server_id === serverId
+    );
+  });
+}
+
+function joinWithAnd(items: string[]): string {
+  if (items.length <= 1) return items.join('');
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
+function buildDeleteMessage(brokenRoles: string[]): string {
+  if (brokenRoles.length === 0) {
+    return "Deleting this server can't be undone.";
+  }
+  return (
+    `Deleting this server will break your ${joinWithAnd(brokenRoles)} role assignment` +
+    `${brokenRoles.length > 1 ? 's' : ''} in this setup, and any installation default that ` +
+    `points to it. This can't be undone.`
+  );
 }
 
 // Status badge colors
@@ -49,10 +93,20 @@ const OUTCOME_LABELS: Record<RefreshOutcome, string> = {
  * - An in-flight refresh that never reported back within the server's 60s
  *   window renders as "did not complete" rather than spinning forever
  *   (FR-026, SC-008).
+ * - An edit affordance swaps the card body for ServerEditForm (US4).
+ * - Deleting confirms first, naming the roles it would break (FR-020).
  */
-export function ServerCard({ server, status, isHighlighted = false, onEditToken }: ServerCardProps): React.ReactElement {
+export function ServerCard({
+  server,
+  status,
+  isHighlighted = false,
+  onEditToken,
+  roleAssignments = null,
+}: ServerCardProps): React.ReactElement {
   const [refreshServerModels] = useRefreshServerModelsMutation();
-  const [isEditingToken, setIsEditingToken] = useState(false);
+  const [deleteServer] = useDeleteServerMutation();
+  const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleRefresh = useCallback(() => {
     if (server.id) {
@@ -61,11 +115,44 @@ export function ServerCard({ server, status, isHighlighted = false, onEditToken 
   }, [refreshServerModels, server.id]);
 
   const handleEditToken = useCallback(() => {
-    setIsEditingToken(true);
+    // auth_rejected's "Edit Token" affordance opens the same edit form
+    // (US3-2) — the token field is right there, no separate flow needed.
+    setIsEditing(true);
     if (server.id) {
       onEditToken?.(server.id);
     }
   }, [onEditToken, server.id]);
+
+  const brokenRoles = useMemo(
+    () => rolesBrokenByDeleting(server.id, roleAssignments),
+    [server.id, roleAssignments],
+  );
+  const deleteMessage = useMemo(() => buildDeleteMessage(brokenRoles), [brokenRoles]);
+
+  const handleConfirmDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+    if (server.id) {
+      deleteServer(server.id);
+    }
+  }, [deleteServer, server.id]);
+
+  if (isEditing) {
+    return (
+      <div
+        className="server-card"
+        data-testid="server-card"
+        data-server-id={server.id}
+        style={{
+          padding: '1rem',
+          border: '1px solid var(--border-color, #e5e7eb)',
+          borderRadius: '0.5rem',
+          backgroundColor: 'var(--bg-card, #ffffff)',
+        }}
+      >
+        <ServerEditForm server={server} onCollapse={() => setIsEditing(false)} />
+      </div>
+    );
+  }
 
   const connectionStatus: ConnectionStatus = status?.connection_status ?? 'never_checked';
   const isInFlight = status?.in_flight ?? false;
@@ -220,34 +307,72 @@ export function ServerCard({ server, status, isHighlighted = false, onEditToken 
             >
               Edit Token
             </button>
-            {isEditingToken && (
-              <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: 'var(--text-secondary, #6b7280)' }}>
-                Update the token in the server form below and save.
-              </p>
-            )}
           </div>
         )}
       </div>
 
-      {/* Refresh button */}
-      <button
-        data-testid="refresh-button"
-        onClick={handleRefresh}
-        disabled={isInFlight}
-        style={{
-          padding: '0.375rem 0.75rem',
-          border: '1px solid var(--border-color, #d1d5db)',
-          borderRadius: '0.375rem',
-          backgroundColor: 'var(--bg-primary, #ffffff)',
-          cursor: isInFlight ? 'not-allowed' : 'pointer',
-          fontSize: '0.875rem',
-          opacity: isInFlight ? 0.5 : 1,
-          flexShrink: 0,
-        }}
-        title="Refresh models"
-      >
-        {isInFlight ? '...' : 'Refresh'}
-      </button>
+      {/* Action buttons */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', flexShrink: 0 }}>
+        <button
+          data-testid="refresh-button"
+          onClick={handleRefresh}
+          disabled={isInFlight}
+          style={{
+            padding: '0.375rem 0.75rem',
+            border: '1px solid var(--border-color, #d1d5db)',
+            borderRadius: '0.375rem',
+            backgroundColor: 'var(--bg-primary, #ffffff)',
+            cursor: isInFlight ? 'not-allowed' : 'pointer',
+            fontSize: '0.875rem',
+            opacity: isInFlight ? 0.5 : 1,
+          }}
+          title="Refresh models"
+        >
+          {isInFlight ? '...' : 'Refresh'}
+        </button>
+        <button
+          type="button"
+          data-testid="edit-button"
+          onClick={() => setIsEditing(true)}
+          style={{
+            padding: '0.375rem 0.75rem',
+            border: '1px solid var(--border-color, #d1d5db)',
+            borderRadius: '0.375rem',
+            backgroundColor: 'var(--bg-primary, #ffffff)',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+          }}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          data-testid="delete-button"
+          onClick={() => setShowDeleteConfirm(true)}
+          style={{
+            padding: '0.375rem 0.75rem',
+            border: '1px solid var(--color-danger, #dc2626)',
+            borderRadius: '0.375rem',
+            backgroundColor: 'var(--bg-primary, #ffffff)',
+            color: 'var(--color-danger, #dc2626)',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+          }}
+        >
+          Delete
+        </button>
+      </div>
+
+      {showDeleteConfirm && (
+        <ConfirmDialog
+          title={`Delete ${server.name}?`}
+          message={deleteMessage}
+          confirmLabel="Delete"
+          destructive
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
     </div>
   );
 }

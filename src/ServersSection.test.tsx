@@ -5,6 +5,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import { serverApi } from './serverApi';
 import { serverStatusApi } from './serverStatusApi';
 import { modelApi } from './modelApi';
+import { roleAssignmentApi } from './roleAssignmentApi';
 
 vi.mock('.', () => ({
   backend: {
@@ -29,6 +30,7 @@ vi.mock('@clarion-app/frontend-base', () => ({
       if (args === '/server') return { data: mockServers };
       if (args === '/server-status') return { data: mockServerStatuses };
       if (args === '/model') return { data: [] };
+      if (args === '/role-assignment') return { data: null };
     }
     // Handle POST to refresh server models
     if (typeof args === 'object' && args.method === 'POST' && args.url?.includes('/server')) {
@@ -46,12 +48,14 @@ function createTestStore() {
       [serverApi.reducerPath]: serverApi.reducer,
       [serverStatusApi.reducerPath]: serverStatusApi.reducer,
       [modelApi.reducerPath]: modelApi.reducer,
+      [roleAssignmentApi.reducerPath]: roleAssignmentApi.reducer,
     },
     middleware: (getDefault) =>
       getDefault().concat(
         serverApi.middleware,
         serverStatusApi.middleware,
-        modelApi.middleware
+        modelApi.middleware,
+        roleAssignmentApi.middleware
       ),
   });
 }
