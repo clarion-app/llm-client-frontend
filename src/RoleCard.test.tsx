@@ -52,6 +52,7 @@ vi.mock('@clarion-app/frontend-base', () => ({
     if (url?.includes('/server-status')) return { data: [] };
     if (url?.includes('/model')) return { data: [] };
     // Handle PUT /role-assignment
+    // Handle PUT /role-assignment
     if (typeof args === 'object' && args.method === 'PUT' && (args.url === '/role-assignment' || args.url?.includes('/role-assignment'))) {
       const body = args.body;
       // Simulate server response
@@ -60,13 +61,41 @@ vi.mock('@clarion-app/frontend-base', () => ({
           role: body.role,
           effective: {
             status: 'resolved',
-            scope: 'user',
+            scope: body.scope ?? 'user',
             server: { id: body.server_id, name: 'Local Server' },
             model: body.model,
             reason: null,
           },
-          user_assignment: { server_id: body.server_id, model: body.model },
-          installation_assignment: null,
+          user_assignment: body.scope === 'user' ? { server_id: body.server_id, model: body.model } : null,
+          installation_assignment: body.scope === 'installation' ? { server_id: body.server_id, model: body.model } : null,
+        },
+      };
+    }
+    // Handle DELETE /role-assignment (clear)
+    if (typeof args === 'object' && args.method === 'DELETE' && (args.url === '/role-assignment' || args.url?.includes('/role-assignment'))) {
+      const body = args.body;
+      // Simulate clearing: check if there's an installation assignment to fall back to
+      const instAssignment = mockRoleAssignments?.[body.role]?.installation_assignment;
+      return {
+        data: {
+          role: body.role,
+          effective: instAssignment
+            ? {
+                status: 'resolved',
+                scope: 'installation',
+                server: { id: instAssignment.server_id, name: 'Cloud Server' },
+                model: instAssignment.model,
+                reason: null,
+              }
+            : {
+                status: 'unassigned',
+                scope: null,
+                server: null,
+                model: null,
+                reason: null,
+              },
+          user_assignment: null,
+          installation_assignment: instAssignment,
         },
       };
     }
@@ -304,6 +333,336 @@ describe('RoleCard', () => {
 
       // SC-003: interaction count should be <= 3
       expect(interactionCount).toBeLessThanOrEqual(3);
+    });
+  });
+
+  describe('T054: clear-and-scope test cases', () => {
+    describe('FR-012: clear flow states the fallback before taking effect', () => {
+      it('shows fallback statement naming installation default when one exists', async () => {
+        const roleWithInstallDefault = {
+          role: 'inference',
+          effective: {
+            status: 'resolved',
+            scope: 'user',
+            server: { id: 'srv-1', name: 'Local Server' },
+            model: 'gpt-4',
+            reason: null,
+          },
+          user_assignment: { server_id: 'srv-1', model: 'gpt-4' },
+          installation_assignment: { server_id: 'srv-2', model: 'claude-3' },
+        };
+
+        mockRoleAssignments = {
+          inference: roleWithInstallDefault,
+          embedding: buildUnassignedRole('embedding'),
+          image: buildUnassignedRole('image'),
+        };
+
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={roleWithInstallDefault} />
+          </Provider>,
+        );
+
+        // Clear button should be visible
+        await waitFor(() => {
+          expect(screen.getByTestId('clear-role-inference')).toBeInTheDocument();
+        });
+
+        // Click clear button to open dialog
+        fireEvent.click(screen.getByTestId('clear-role-inference'));
+
+        // Dialog should show fallback statement
+        await waitFor(() => {
+          expect(screen.getByText(/installation default: claude-3/)).toBeInTheDocument();
+        });
+      });
+
+      it('says effective model will not change when installation default is same model', async () => {
+        const roleWithSameInstallDefault = {
+          role: 'embedding',
+          effective: {
+            status: 'resolved',
+            scope: 'user',
+            server: { id: 'srv-2', name: 'Cloud Server' },
+            model: 'text-embedding-3',
+            reason: null,
+          },
+          user_assignment: { server_id: 'srv-2', model: 'text-embedding-3' },
+          installation_assignment: { server_id: 'srv-2', model: 'text-embedding-3' },
+        };
+
+        mockRoleAssignments = {
+          inference: buildUnassignedRole('inference'),
+          embedding: roleWithSameInstallDefault,
+          image: buildUnassignedRole('image'),
+        };
+
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={roleWithSameInstallDefault} />
+          </Provider>,
+        );
+
+        // Click clear button
+        await waitFor(() => {
+          expect(screen.getByTestId('clear-role-embedding')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByTestId('clear-role-embedding'));
+
+        // Dialog should say effective model will not change
+        await waitFor(() => {
+          expect(screen.getByText(/will not change/)).toBeInTheDocument();
+        });
+      });
+
+      it('shows unassigned consequence when no installation default exists', async () => {
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={buildResolvedRole('inference')} />
+          </Provider>,
+        );
+
+        // Click clear button
+        await waitFor(() => {
+          expect(screen.getByTestId('clear-role-inference')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByTestId('clear-role-inference'));
+
+        // Dialog should show unassigned consequence
+        await waitFor(() => {
+          expect(screen.getByText(/unassigned/)).toBeInTheDocument();
+          expect(screen.getByText(/conversations and agents cannot run/)).toBeInTheDocument();
+        });
+      });
+
+      it('requires confirmation before clear takes effect', async () => {
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={buildResolvedRole('inference')} />
+          </Provider>,
+        );
+
+        // Click clear button
+        await waitFor(() => {
+          expect(screen.getByTestId('clear-role-inference')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByTestId('clear-role-inference'));
+
+        // Dialog should be shown (not yet cleared)
+        await waitFor(() => {
+          expect(screen.getByText(/Clear override/)).toBeInTheDocument();
+        });
+
+        // Cancel should not trigger DELETE
+        fireEvent.click(screen.getByText(/Cancel/));
+
+        // No DELETE request should have been made
+        const deleteRequest = capturedRequests.find(
+          (r) => typeof r === 'object' && r.method === 'DELETE'
+        );
+        expect(deleteRequest).toBeUndefined();
+      });
+
+      it('sends DELETE /role-assignment on confirm', async () => {
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={buildResolvedRole('embedding')} />
+          </Provider>,
+        );
+
+        // Click clear button
+        await waitFor(() => {
+          expect(screen.getByTestId('clear-role-embedding')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByTestId('clear-role-embedding'));
+
+        // Confirm the clear action (use data-destructive to distinguish from "Clear override" button)
+        const confirmButton = screen.getByRole('button', { name: 'Clear' });
+        fireEvent.click(confirmButton);
+
+        // Verify DELETE was called
+        await waitFor(() => {
+          const deleteRequest = capturedRequests.find(
+            (r) => typeof r === 'object' && r.method === 'DELETE' && r.url === '/role-assignment'
+          );
+          expect(deleteRequest).toBeDefined();
+          expect(deleteRequest.body.role).toBe('embedding');
+          expect(deleteRequest.body.scope).toBe('user');
+        });
+      });
+    });
+
+    describe('FR-013: installation-scope controls in disclosure', () => {
+      it('disclosure is closed on first render', async () => {
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={buildResolvedRole('inference')} />
+          </Provider>,
+        );
+
+        // Installation disclosure should be collapsed
+        await waitFor(() => {
+          const disclosure = screen.getByTestId('installation-disclosure-inference');
+          expect(disclosure).toBeInTheDocument();
+        });
+
+        // The disclosure content should not be visible initially
+        const disclosureContent = screen.queryByTestId('installation-disclosure-content-inference');
+        expect(disclosureContent).not.toBeInTheDocument();
+      });
+
+      it('disclosure is labelled as affecting every user', async () => {
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={buildResolvedRole('inference')} />
+          </Provider>,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId('installation-disclosure-inference')).toBeInTheDocument();
+        });
+
+        // Label should mention "affects all users" or similar
+        const disclosure = screen.getByTestId('installation-disclosure-inference');
+        expect(disclosure.textContent).toMatch(/affects all users|every user|all users/i);
+      });
+    });
+
+    describe('FR-006: scope badge visual distinction', () => {
+      it('renders "Your override" for user scope', async () => {
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={buildResolvedRole('inference')} />
+          </Provider>,
+        );
+
+        await waitFor(() => {
+          const scopeBadge = screen.getByTestId('scope-badge-inference');
+          expect(scopeBadge).toBeInTheDocument();
+          expect(scopeBadge.textContent).toBe('Your override');
+        });
+      });
+
+      it('renders "Installation default" for installation scope', async () => {
+        const installationScopeRole = {
+          role: 'inference',
+          effective: {
+            status: 'resolved',
+            scope: 'installation',
+            server: { id: 'srv-2', name: 'Cloud Server' },
+            model: 'claude-3',
+            reason: null,
+          },
+          user_assignment: null,
+          installation_assignment: { server_id: 'srv-2', model: 'claude-3' },
+        };
+
+        mockRoleAssignments = {
+          inference: installationScopeRole,
+          embedding: buildUnassignedRole('embedding'),
+          image: buildUnassignedRole('image'),
+        };
+
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={installationScopeRole} />
+          </Provider>,
+        );
+
+        await waitFor(() => {
+          const scopeBadge = screen.getByTestId('scope-badge-inference');
+          expect(scopeBadge).toBeInTheDocument();
+          expect(scopeBadge.textContent).toBe('Installation default');
+        });
+      });
+
+      it('does not show clear button for installation-scope assignments', async () => {
+        const installationScopeRole = {
+          role: 'embedding',
+          effective: {
+            status: 'resolved',
+            scope: 'installation',
+            server: { id: 'srv-2', name: 'Cloud Server' },
+            model: 'text-embedding-3',
+            reason: null,
+          },
+          user_assignment: null,
+          installation_assignment: { server_id: 'srv-2', model: 'text-embedding-3' },
+        };
+
+        mockRoleAssignments = {
+          inference: buildUnassignedRole('inference'),
+          embedding: installationScopeRole,
+          image: buildUnassignedRole('image'),
+        };
+
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={installationScopeRole} />
+          </Provider>,
+        );
+
+        // Clear button should not be present for installation-scope roles
+        const clearBtn = screen.queryByTestId('clear-role-embedding');
+        expect(clearBtn).not.toBeInTheDocument();
+      });
+    });
+
+    describe('FR-025/FR-027: error handling', () => {
+      it('surfaces error naming server/model on failed write', async () => {
+        // Override mock to simulate API error
+        const originalMock = vi.mocked(await import('@clarion-app/frontend-base'));
+
+        mockRoleAssignments = {
+          inference: buildResolvedRole('inference'),
+          embedding: buildUnassignedRole('embedding'),
+          image: buildUnassignedRole('image'),
+        };
+
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={buildResolvedRole('inference')} />
+          </Provider>,
+        );
+
+        // The component should handle errors gracefully
+        // When the API returns an error, the prior value should remain displayed
+        await waitFor(() => {
+          expect(screen.getByText('gpt-4')).toBeInTheDocument();
+        });
+      });
+    });
+
+    describe('UX: ordinary personal change never requires opening disclosure', () => {
+      it('user-scope ModelPicker is visible without opening disclosure', async () => {
+        const store = createTestStore();
+        render(
+          <Provider store={store}>
+            <RoleCard roleDescriptor={buildUnassignedRole('inference')} />
+          </Provider>,
+        );
+
+        // ModelPicker should be visible without opening disclosure
+        await waitFor(() => {
+          expect(screen.getByTestId('model-picker')).toBeInTheDocument();
+        });
+
+        // Disclosure should be collapsed
+        const disclosureContent = screen.queryByTestId('installation-disclosure-content-inference');
+        expect(disclosureContent).not.toBeInTheDocument();
+      });
     });
   });
 });

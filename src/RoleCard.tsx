@@ -1,8 +1,10 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ModelPicker } from './ModelPicker';
 import { RoleStatusLine } from './RoleStatusLine';
+import { InstallationDisclosure } from './InstallationDisclosure';
+import { ConfirmDialog } from './ConfirmDialog';
 import { RoleDescriptor, RoleEffective } from './types';
-import { useSetRoleAssignmentMutation } from './roleAssignmentApi';
+import { useSetRoleAssignmentMutation, useClearRoleAssignmentMutation } from './roleAssignmentApi';
 
 interface RoleCardProps {
   roleDescriptor: RoleDescriptor;
@@ -20,13 +22,39 @@ const CONSEQUENCE_MESSAGES: Record<string, string> = {
  *
  * - `resolved` renders model + server + scope with no interaction.
  * - `unassigned` renders the consequence sentence for that role.
+ * - `broken` renders a warning (US3).
  * - Assign from the card via ModelPicker without navigation.
  * - After a successful assign, the panel shows the server-returned descriptor (FR-011, FR-025).
  * - SC-003: Changing the inference role's model from the loaded screen takes ≤ 3 interactions.
+ * - Clear flow states the fallback before it takes effect (FR-012).
+ * - Installation-scope controls in a disclosure, closed on first render (FR-013).
+ * - `resolved` + `scope: installation` is visually distinct from `scope: user` (FR-006).
  */
 export function RoleCard({ roleDescriptor }: RoleCardProps): React.ReactElement {
-  const { role, effective } = roleDescriptor;
+  const { role, effective, user_assignment, installation_assignment } = roleDescriptor;
   const [setRoleAssignment] = useSetRoleAssignmentMutation();
+  const [clearRoleAssignment] = useClearRoleAssignmentMutation();
+  const [showClearDialog, setShowClearDialog] = useState(false);
+
+  // Compute the fallback statement when clearing a user-scope assignment
+  const clearFallbackStatement = useMemo(() => {
+    if (!user_assignment) return null;
+
+    // If there's an installation default, that's the fallback
+    if (installation_assignment) {
+      // Check if the installation default is the same model
+      if (
+        installation_assignment.server_id === user_assignment.server_id &&
+        installation_assignment.model === user_assignment.model
+      ) {
+        return 'The effective model will not change (same as installation default).';
+      }
+      return `Clearing this will fall back to the installation default: ${installation_assignment.model}.`;
+    }
+
+    // No installation default — will become unassigned
+    return 'Clearing this will leave the role unassigned. ' + (CONSEQUENCE_MESSAGES[role] ?? '');
+  }, [role, user_assignment, installation_assignment]);
 
   const handleSelect = useCallback(
     (value: { server_id: string; model: string }) => {
@@ -36,11 +64,21 @@ export function RoleCard({ roleDescriptor }: RoleCardProps): React.ReactElement 
         server_id: value.server_id,
         model: value.model,
       });
-      // The RTK Query mutation will invalidate the RoleAssignment tag,
-      // causing the parent to re-fetch and re-render with the server-returned descriptor.
     },
     [role, setRoleAssignment]
   );
+
+  const handleClearConfirm = useCallback(() => {
+    clearRoleAssignment({
+      role,
+      scope: 'user',
+    });
+    setShowClearDialog(false);
+  }, [role, clearRoleAssignment]);
+
+  const handleClearCancel = useCallback(() => {
+    setShowClearDialog(false);
+  }, []);
 
   return (
     <div
@@ -61,6 +99,51 @@ export function RoleCard({ roleDescriptor }: RoleCardProps): React.ReactElement 
       {/* Status line — shows model/server/scope or consequence message */}
       <RoleStatusLine effective={effective} role={role} />
 
+      {/* Scope indicator — visually distinct for user vs installation (FR-006) */}
+      {effective.status === 'resolved' && (
+        <div style={{ marginTop: '0.25rem' }}>
+          <span
+            data-testid={`scope-badge-${role}`}
+            style={{
+              fontSize: '0.6875rem',
+              padding: '0.125rem 0.375rem',
+              borderRadius: '0.25rem',
+              backgroundColor: effective.scope === 'user'
+                ? 'var(--bg-accent, #dbeafe)'
+                : 'var(--bg-muted, #f3f4f6)',
+              color: effective.scope === 'user'
+                ? 'var(--text-accent, #1d4ed8)'
+                : 'var(--text-secondary, #6b7280)',
+              fontWeight: 500,
+            }}
+          >
+            {effective.scope === 'user' ? 'Your override' : 'Installation default'}
+          </span>
+        </div>
+      )}
+
+      {/* Clear button (only shown when there's a user-scope assignment) */}
+      {user_assignment && (
+        <div style={{ marginTop: '0.5rem' }}>
+          <button
+            type="button"
+            data-testid={`clear-role-${role}`}
+            onClick={() => setShowClearDialog(true)}
+            style={{
+              padding: '0.25rem 0.5rem',
+              border: '1px solid var(--border-color, #d1d5db)',
+              borderRadius: '0.25rem',
+              backgroundColor: 'var(--bg-card, #ffffff)',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              color: 'var(--text-warning, #92400e)',
+            }}
+          >
+            Clear override
+          </button>
+        </div>
+      )}
+
       {/* Model picker for assignment */}
       <div style={{ marginTop: '0.75rem' }}>
         <ModelPicker
@@ -73,6 +156,21 @@ export function RoleCard({ roleDescriptor }: RoleCardProps): React.ReactElement 
           role={role}
         />
       </div>
+
+      {/* Installation disclosure — collapsed by default (FR-013) */}
+      <InstallationDisclosure roleDescriptor={roleDescriptor} />
+
+      {/* Clear confirmation dialog (FR-012) */}
+      {showClearDialog && clearFallbackStatement && (
+        <ConfirmDialog
+          title={`Clear ${role} override?`}
+          message={clearFallbackStatement}
+          confirmLabel="Clear"
+          onConfirm={handleClearConfirm}
+          onCancel={handleClearCancel}
+          destructive
+        />
+      )}
     </div>
   );
 }

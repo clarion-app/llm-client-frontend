@@ -1,18 +1,23 @@
 import React, { useState, useMemo } from 'react';
 import { useGetAllModelsQuery } from './modelApi';
 import { useGetServersQuery } from './serverApi';
-import { LanguageModelType } from './types';
+import { useGetRoleAssignmentsQuery } from './roleAssignmentApi';
+import { LanguageModelType, RoleAssignmentsType } from './types';
+import { ModelSearchInput } from './ModelSearchInput';
+import { ServerModelGroup } from './ServerModelGroup';
 
 /**
  * ModelsSection — displays all available models grouped by server.
  *
- * - Shows model names under their server headings.
- * - Filter input to narrow models across all servers.
+ * - All known models grouped under their server (ServerModelGroup).
+ * - ModelSearchInput narrows across all servers (FR-022).
+ * - Assignment remains available from the narrowed list (FR-021, FR-022).
  * - Empty group headings disappear when filter narrows results.
  */
 export function ModelsSection(): React.ReactElement {
   const { data: allModels = [] } = (useGetAllModelsQuery() as { data: any[] });
   const { data: servers = [] } = useGetServersQuery(null);
+  const { data: roleAssignments } = (useGetRoleAssignmentsQuery(null) as { data: RoleAssignmentsType | null });
   const [filterText, setFilterText] = useState('');
 
   // Build server name map
@@ -24,7 +29,7 @@ export function ModelsSection(): React.ReactElement {
     return map;
   }, [servers]);
 
-  // Group models by server
+  // Group models by server, apply filter
   const groupedModels = useMemo(() => {
     const groups = new Map<string, LanguageModelType[]>();
 
@@ -40,73 +45,61 @@ export function ModelsSection(): React.ReactElement {
     if (filterText.trim()) {
       const filter = filterText.trim().toLowerCase();
       for (const [key, models] of groups) {
-        const filtered = models.filter((m) => m.name.toLowerCase().includes(filter));
-        groups.set(key, filtered);
+        const filtered = models.filter(
+          (m) =>
+            m.name.toLowerCase().includes(filter) ||
+            (serverNameMap.get(key) ?? '').toLowerCase().includes(filter)
+        );
+        if (filtered.length === 0) {
+          groups.delete(key);
+        } else {
+          groups.set(key, filtered);
+        }
       }
     }
 
     return groups;
-  }, [allModels, filterText]);
+  }, [allModels, filterText, serverNameMap]);
 
   return (
     <div data-testid="models-section" className="models-section">
       <h2 style={{ margin: '0 0 1rem', fontSize: '1.125rem', fontWeight: 600 }}>Available Models</h2>
 
-      {/* Filter input */}
-      <div style={{ marginBottom: '1rem' }}>
-        <input
-          type="text"
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-          placeholder="Filter models..."
-          style={{
-            width: '100%',
-            padding: '0.5rem',
-            border: '1px solid var(--border-color, #d1d5db)',
-            borderRadius: '0.375rem',
-            boxSizing: 'border-box',
-          }}
-        />
-      </div>
+      {/* Search input */}
+      <ModelSearchInput value={filterText} onChange={setFilterText} />
 
       {/* Model groups */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {Array.from(groupedModels.entries()).map(([serverId, models]) => {
-          // Skip empty groups when filtering
-          if (models.length === 0) return null;
-
           const serverName = serverNameMap.get(serverId) ?? `Server ${serverId}`;
 
           return (
-            <div key={serverId} style={{ border: '1px solid var(--border-color, #e5e7eb)', borderRadius: '0.5rem', overflow: 'hidden' }}>
-              {/* Server heading */}
-              <div
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: 'var(--bg-muted, #f9fafb)',
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                }}
-              >
-                {serverName}
-              </div>
-
-              {/* Model list */}
-              <ul style={{ margin: 0, padding: '0.5rem 1rem', listStyle: 'none' }}>
-                {models.map((model) => (
-                  <li
-                    key={model.id}
-                    style={{
-                      padding: '0.375rem 0',
-                      fontSize: '0.875rem',
-                      borderBottom: '1px solid var(--border-color, #f3f4f6)',
-                    }}
-                  >
-                    {model.name}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ServerModelGroup
+              key={serverId}
+              serverId={serverId}
+              serverName={serverName}
+              models={models}
+              roleAssignments={roleAssignments ?? {
+                inference: {
+                  role: 'inference',
+                  effective: { status: 'unassigned', scope: null, server: null, model: null, reason: null },
+                  user_assignment: null,
+                  installation_assignment: null,
+                },
+                embedding: {
+                  role: 'embedding',
+                  effective: { status: 'unassigned', scope: null, server: null, model: null, reason: null },
+                  user_assignment: null,
+                  installation_assignment: null,
+                },
+                image: {
+                  role: 'image',
+                  effective: { status: 'unassigned', scope: null, server: null, model: null, reason: null },
+                  user_assignment: null,
+                  installation_assignment: null,
+                },
+              }}
+            />
           );
         })}
 
