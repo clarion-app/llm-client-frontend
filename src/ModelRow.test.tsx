@@ -183,6 +183,84 @@ describe('ModelRow', () => {
     expect(screen.getByText('Cloud Server')).toBeInTheDocument();
   });
 
+  // Ported from AllModels.test.tsx ("shows model holding role at installation
+  // scope is annotated") — not covered elsewhere: ModelRow renders badges
+  // from a roleAssignments prop directly, and no other test asserted the
+  // literal "(installation)"/"(user)" scope label text.
+  it('labels a role badge with its scope: installation', async () => {
+    const resolvedInstallation = {
+      role: 'embedding',
+      effective: {
+        status: 'resolved',
+        scope: 'installation',
+        server: { id: 'srv-1', name: 'Local Server' },
+        model: 'gpt-4',
+        reason: null,
+      },
+      user_assignment: null,
+      installation_assignment: { server_id: 'srv-1', model: 'gpt-4' },
+    };
+    mockRoleAssignments = {
+      ...mockRoleAssignments,
+      embedding: resolvedInstallation,
+    };
+
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <ModelRow model={mockModels[0]} serverName={mockServers[0].name} roleAssignments={mockRoleAssignments} />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId('role-badge-embedding')).toBeInTheDocument();
+    expect(screen.getByText('(installation)')).toBeInTheDocument();
+  });
+
+  // Ported from AllModels.test.tsx ("shows both roles for model holding two
+  // roles") — not covered elsewhere: no other test assigns a single model
+  // two roles at two different scopes simultaneously.
+  it('shows a badge for each role a model holds simultaneously, with distinct scopes', async () => {
+    mockRoleAssignments = {
+      inference: {
+        role: 'inference',
+        effective: {
+          status: 'resolved',
+          scope: 'user',
+          server: { id: 'srv-1', name: 'Local Server' },
+          model: 'gpt-4',
+          reason: null,
+        },
+        user_assignment: { server_id: 'srv-1', model: 'gpt-4' },
+        installation_assignment: null,
+      },
+      embedding: {
+        role: 'embedding',
+        effective: {
+          status: 'resolved',
+          scope: 'installation',
+          server: { id: 'srv-1', name: 'Local Server' },
+          model: 'gpt-4',
+          reason: null,
+        },
+        user_assignment: null,
+        installation_assignment: { server_id: 'srv-1', model: 'gpt-4' },
+      },
+      image: mockRoleAssignments.image,
+    };
+
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <ModelRow model={mockModels[0]} serverName={mockServers[0].name} roleAssignments={mockRoleAssignments} />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId('role-badge-inference')).toBeInTheDocument();
+    expect(screen.getByTestId('role-badge-embedding')).toBeInTheDocument();
+    expect(screen.getByText('(user)')).toBeInTheDocument();
+    expect(screen.getByText('(installation)')).toBeInTheDocument();
+  });
+
   it('long model/server names wrap or scroll with the distinguishing part still readable', async () => {
     mockModels = [
       { id: 'm-1', name: 'very-long-model-name-that-should-wrap-or-scroll-without-breaking-the-layout', server_id: 'srv-1' },

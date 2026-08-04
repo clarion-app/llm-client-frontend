@@ -43,7 +43,8 @@
                 "llmClientMessageApi",
                 "llmClientModelApi",
                 "llmClientServerApi",
-                "llmClientRoleAssignmentApi"
+                "llmClientRoleAssignmentApi",
+                "llmClientServerStatusApi"
             ],
             "routes": [
                 {
@@ -55,20 +56,24 @@
                     "element": "<Conversation />"
                 },
                 {
+                    "path": "/clarion-app/llm-client/model-setup",
+                    "element": "<ModelSetup />"
+                },
+                {
                     "path": "/clarion-app/llm-client/servers",
-                    "element": "<Servers />"
+                    "element": "<ModelSetupRedirect />"
                 },
                 {
                     "path": "/clarion-app/llm-client/servers/:id/models",
-                    "element": "<Models />"
+                    "element": "<ModelSetupRedirect />"
                 },
                 {
                     "path": "/clarion-app/llm-client/models",
-                    "element": "<AllModels />"
+                    "element": "<ModelSetupRedirect />"
                 },
                 {
                     "path": "/clarion-app/llm-client/settings",
-                    "element": "<RoleSettings />"
+                    "element": "<ModelSetupRedirect />"
                 }
             ],
             "menu": {
@@ -79,16 +84,8 @@
                         "path": "/clarion-app/llm-client/conversations"
                     },
                     {
-                        "name": "Servers",
-                        "path": "/clarion-app/llm-client/servers"
-                    },
-                    {
-                        "name": "Models",
-                        "path": "/clarion-app/llm-client/models"
-                    },
-                    {
-                        "name": "Settings",
-                        "path": "/clarion-app/llm-client/settings"
+                        "name": "Model Setup",
+                        "path": "/clarion-app/llm-client/model-setup"
                     }
                 ],
                 "pinnedEntries": [
