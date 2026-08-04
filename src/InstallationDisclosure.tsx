@@ -50,7 +50,6 @@ export function InstallationDisclosure({
         marginTop: '0.75rem',
         border: '1px solid var(--border-color, #e5e7eb)',
         borderRadius: '0.375rem',
-        overflow: 'hidden',
       }}
     >
       {/* Disclosure header */}
@@ -64,6 +63,7 @@ export function InstallationDisclosure({
           width: '100%',
           padding: '0.5rem 0.75rem',
           border: 'none',
+          borderRadius: isOpen ? '0.3125rem 0.3125rem 0 0' : '0.3125rem',
           backgroundColor: 'var(--bg-muted, #f9fafb)',
           cursor: 'pointer',
           fontSize: '0.8125rem',
