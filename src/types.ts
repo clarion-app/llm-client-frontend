@@ -24,10 +24,37 @@ export interface ConversationType extends LaravelModelType {
   channel?: string;
 }
 
+export type ProviderFamily = 'openai' | 'llama.cpp' | 'anthropic';
+
+export type ConnectionStatus = 'never_checked' | 'reachable' | 'unreachable' | 'auth_rejected';
+
+export type RefreshOutcome = 'models_updated' | 'zero_models' | 'auth_rejected' | 'http_error' | 'unreachable' | 'did_not_complete';
+
 export interface ServerType extends LaravelModelType {
   name: string;
   server_url: string;
+  provider_type?: ProviderFamily;
   token?: string;
+}
+
+export interface ServerStatusType {
+  server_id: string;
+  connection_status: ConnectionStatus;
+  in_flight: boolean;
+  last_outcome: RefreshOutcome | null;
+  last_error: string | null;
+  model_count: number;
+  triggered_by: string | null;
+  last_refresh_at: string | null;
+}
+
+export interface RoleTestResultType {
+  role: string;
+  outcome: 'pass' | 'fail' | 'not_testable' | 'no_effective_model';
+  model: string | null;
+  server: string | null;
+  message: string;
+  duration_ms: number | null;
 }
 
 export interface ApiCallConfirmationType {

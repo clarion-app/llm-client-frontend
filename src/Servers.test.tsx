@@ -4,6 +4,8 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter } from 'react-router-dom';
 import { serverApi } from './serverApi';
+import { serverStatusApi } from './serverStatusApi';
+import { modelApi } from './modelApi';
 
 vi.mock('.', () => ({
   backend: {
@@ -47,9 +49,11 @@ function createTestStore() {
   return configureStore({
     reducer: {
       [serverApi.reducerPath]: serverApi.reducer,
+      [serverStatusApi.reducerPath]: serverStatusApi.reducer,
+      [modelApi.reducerPath]: modelApi.reducer,
     },
     middleware: (getDefault) =>
-      getDefault().concat(serverApi.middleware),
+      getDefault().concat(serverApi.middleware, serverStatusApi.middleware, modelApi.middleware),
   });
 }
 
