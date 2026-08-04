@@ -69,11 +69,6 @@ export interface ApiCallConfirmationType {
   body: Record<string, unknown>;
 }
 
-export interface UserSettingType {
-  server_id: string | null;
-  model: string | null;
-}
-
 // Role assignment types
 export interface RoleEffective {
   status: 'resolved' | 'unassigned' | 'broken';
