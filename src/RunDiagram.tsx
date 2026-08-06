@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useGetRunQuery, useGetRunStepsQuery, useGetStepActionsQuery, useGetActionChildrenQuery } from './runApi';
 import { RunStepNode } from './RunStepNode';
 import { RunActionNode } from './RunActionNode';
+import { RunElementDetail } from './RunElementDetail';
+import type { RunElementSelection } from './RunElementDetail';
 import type { RunSummary, StepSummary, ActionSummary } from './types';
 
 /**
@@ -82,10 +84,11 @@ interface ActionContainerProps {
   maxDurationMs: number;
   overlap: boolean;
   autoExpand: boolean;
+  onSelect: (selection: RunElementSelection) => void;
 }
 
 /** One action node plus its own lazily-fetched (or auto-expanded) children — recursable for nested actions (FR-002). */
-function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand }: ActionContainerProps): React.ReactElement {
+function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand, onSelect }: ActionContainerProps): React.ReactElement {
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const isExpanded = action.has_children && (autoExpand || manuallyExpanded);
 
@@ -104,6 +107,7 @@ function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand }: 
       overlap={overlap}
       isExpanded={isExpanded}
       onToggleExpand={() => setManuallyExpanded((v) => !v)}
+      onSelect={() => onSelect({ type: 'action', actionId: action.id })}
     >
       {isExpanded &&
         children.map((child) => (
@@ -114,6 +118,7 @@ function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand }: 
             maxDurationMs={childMaxDuration}
             overlap={overlappingChildIds.has(child.id)}
             autoExpand={autoExpand}
+            onSelect={onSelect}
           />
         ))}
     </RunActionNode>
@@ -125,10 +130,11 @@ interface StepContainerProps {
   step: StepSummary;
   maxDurationMs: number;
   autoExpand: boolean;
+  onSelect: (selection: RunElementSelection) => void;
 }
 
 /** One step node plus its own lazily-fetched (or auto-expanded) top-level actions. */
-function StepContainer({ runId, step, maxDurationMs, autoExpand }: StepContainerProps): React.ReactElement {
+function StepContainer({ runId, step, maxDurationMs, autoExpand, onSelect }: StepContainerProps): React.ReactElement {
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const isExpanded = autoExpand || manuallyExpanded;
 
@@ -146,6 +152,7 @@ function StepContainer({ runId, step, maxDurationMs, autoExpand }: StepContainer
       maxDurationMs={maxDurationMs}
       isExpanded={isExpanded}
       onToggleExpand={() => setManuallyExpanded((v) => !v)}
+      onSelect={() => onSelect({ type: 'step', step })}
     >
       {isExpanded &&
         actions.map((action) => (
@@ -156,6 +163,7 @@ function StepContainer({ runId, step, maxDurationMs, autoExpand }: StepContainer
             maxDurationMs={actionMaxDuration}
             overlap={overlappingIds.has(action.id)}
             autoExpand={autoExpand}
+            onSelect={onSelect}
           />
         ))}
     </RunStepNode>
@@ -167,6 +175,8 @@ export interface RunDiagramProps {
 }
 
 export function RunDiagram({ runId }: RunDiagramProps): React.ReactElement {
+  const [selected, setSelected] = useState<RunElementSelection | null>(null);
+
   const { data: run, isLoading: runLoading, isError: runIsError, error: runError } = useGetRunQuery(runId);
 
   const { data: stepsEnvelope, isLoading: stepsLoading, isError: stepsIsError, error: stepsError } =
@@ -221,16 +231,22 @@ export function RunDiagram({ runId }: RunDiagramProps): React.ReactElement {
       {steps.length === 0 ? (
         <div data-testid="run-diagram-empty">This run has no steps recorded yet.</div>
       ) : (
-        <div className="run-diagram__steps">
-          {steps.map((step) => (
-            <StepContainer
-              key={step.id}
-              runId={runId}
-              step={step}
-              maxDurationMs={stepMaxDuration}
-              autoExpand={isSmallRun}
-            />
-          ))}
+        <div className="run-diagram__body flex gap-4">
+          <div className="run-diagram__steps flex-1">
+            {steps.map((step) => (
+              <StepContainer
+                key={step.id}
+                runId={runId}
+                step={step}
+                maxDurationMs={stepMaxDuration}
+                autoExpand={isSmallRun}
+                onSelect={setSelected}
+              />
+            ))}
+          </div>
+          <div className="run-diagram__detail w-80 shrink-0">
+            <RunElementDetail runId={runId} selected={selected} />
+          </div>
         </div>
       )}
     </div>

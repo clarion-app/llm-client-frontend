@@ -15,6 +15,8 @@ export interface RunStepNodeProps {
   maxDurationMs: number;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  /** Opens this step in the detail panel (FR-005, US2). Optional so this component stays usable without a detail panel wired up. */
+  onSelect?: () => void;
   children?: React.ReactNode;
 }
 
@@ -40,6 +42,7 @@ export function RunStepNode({
   maxDurationMs,
   isExpanded,
   onToggleExpand,
+  onSelect,
   children,
 }: RunStepNodeProps): React.ReactElement {
   const isRunning = step.end_state === 'in_progress' && step.ended_at === null;
@@ -51,6 +54,11 @@ export function RunStepNode({
       ? Math.max(2, (step.duration_ms / maxDurationMs) * 100)
       : 0;
 
+  const activate = () => {
+    onToggleExpand();
+    onSelect?.();
+  };
+
   return (
     <div
       data-testid={`run-step-${step.id}`}
@@ -61,9 +69,9 @@ export function RunStepNode({
         className="run-step-node__header flex items-center gap-2 px-2 py-1 cursor-pointer"
         role="button"
         tabIndex={0}
-        onClick={onToggleExpand}
+        onClick={activate}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') onToggleExpand();
+          if (e.key === 'Enter' || e.key === ' ') activate();
         }}
       >
         <span aria-hidden="true">{isExpanded ? '▾' : '▸'}</span>

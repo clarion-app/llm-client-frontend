@@ -21,6 +21,8 @@ export interface RunActionNodeProps {
   overlap: boolean;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  /** Opens this action in the detail panel (FR-005, US2). Optional so this component stays usable without a detail panel wired up. */
+  onSelect?: () => void;
   children?: React.ReactNode;
 }
 
@@ -47,6 +49,7 @@ export function RunActionNode({
   overlap,
   isExpanded,
   onToggleExpand,
+  onSelect,
   children,
 }: RunActionNodeProps): React.ReactElement {
   const isRunning = action.outcome === 'in_progress' && action.ended_at === null;
@@ -56,6 +59,11 @@ export function RunActionNode({
     !isRunning && action.duration_ms !== null && maxDurationMs > 0
       ? Math.max(2, (action.duration_ms / maxDurationMs) * 100)
       : 0;
+
+  const activate = () => {
+    onToggleExpand();
+    onSelect?.();
+  };
 
   return (
     <div
@@ -68,9 +76,9 @@ export function RunActionNode({
         className="run-action-node__header flex items-center gap-2 px-2 py-1 cursor-pointer"
         role="button"
         tabIndex={0}
-        onClick={onToggleExpand}
+        onClick={activate}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') onToggleExpand();
+          if (e.key === 'Enter' || e.key === ' ') activate();
         }}
       >
         {action.has_children && <span aria-hidden="true">{isExpanded ? '▾' : '▸'}</span>}

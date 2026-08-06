@@ -1,7 +1,7 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { createBaseQuery } from '@clarion-app/frontend-base';
 import { backend } from './config';
-import type { RunSummary, StepSummary, ActionSummary, PaginatedEnvelope } from './types';
+import type { RunSummary, StepSummary, ActionSummary, ActionDetail, PaginatedEnvelope } from './types';
 
 export const runApi = createApi({
   reducerPath: 'llm-client-runApi',
@@ -45,6 +45,15 @@ export const runApi = createApi({
       query: ({ runId, actionId }) => `/agent-runs/${runId}/actions/${actionId}/children`,
       providesTags: (_result, _error, { actionId }) => [{ type: 'RunActions', id: actionId }],
     }),
+
+    // GET /agent-runs/{runId}/actions/{actionId} — the single selected
+    // action's full detail, including `content`/`content_truncated` (US2,
+    // FR-005, FR-006, FR-007). The only query on this file that returns
+    // content.
+    getActionDetail: builder.query<ActionDetail, { runId: string; actionId: string }>({
+      query: ({ runId, actionId }) => `/agent-runs/${runId}/actions/${actionId}`,
+      providesTags: (_result, _error, { actionId }) => [{ type: 'RunActions', id: actionId }],
+    }),
   }),
 });
 
@@ -53,4 +62,5 @@ export const {
   useGetRunStepsQuery,
   useGetStepActionsQuery,
   useGetActionChildrenQuery,
+  useGetActionDetailQuery,
 } = runApi;
