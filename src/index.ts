@@ -19,3 +19,6 @@ export { llmClientConversationApi, llmClientServerApi, llmClientModelApi, llmCli
 
 // Side-effect import: registers handler for ServerModelsRefreshed broadcasts
 import './serverStatusRealtime';
+
+// Side-effect import: registers handlers for RunUpdated/RunStepUpdated/RunActionUpdated broadcasts
+import './runRealtime';
