@@ -8,6 +8,14 @@ export const runApi = createApi({
   baseQuery: createBaseQuery({ routePrefix: '/api/clarion-app/llm-client', backendConfig: backend }),
   tagTypes: ['Run', 'RunList', 'RunSteps', 'RunActions'],
   endpoints: (builder) => ({
+    // GET /agent-runs — the caller's own runs, most recent first, paginated
+    // (US6, FR-024/FR-025). The entry point for finding a run with no
+    // visible triggering message (RunsList.tsx).
+    getRuns: builder.query<PaginatedEnvelope<RunSummary>, void>({
+      query: () => '/agent-runs',
+      providesTags: ['RunList'],
+    }),
+
     // GET /agent-runs/{runId} — O(1) run summary. Reopening or refreshing a
     // previously-viewed run's diagram must re-fetch the run's current
     // recorded state rather than serving a stale cache entry (FR-020,
@@ -58,6 +66,7 @@ export const runApi = createApi({
 });
 
 export const {
+  useGetRunsQuery,
   useGetRunQuery,
   useGetRunStepsQuery,
   useGetStepActionsQuery,

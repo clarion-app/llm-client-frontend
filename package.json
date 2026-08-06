@@ -81,6 +81,10 @@
                     "element": "<ModelSetupRedirect />"
                 },
                 {
+                    "path": "/clarion-app/llm-client/runs",
+                    "element": "<RunsList />"
+                },
+                {
                     "path": "/clarion-app/llm-client/runs/:id",
                     "element": "<RunDiagram />"
                 }
@@ -95,6 +99,10 @@
                     {
                         "name": "Model Setup",
                         "path": "/clarion-app/llm-client/model-setup"
+                    },
+                    {
+                        "name": "Runs",
+                        "path": "/clarion-app/llm-client/runs"
                     }
                 ],
                 "pinnedEntries": [
