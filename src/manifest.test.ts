@@ -208,4 +208,30 @@ describe('manifest — customFields.clarion.api (FR-003a)', () => {
   it('does not contain llmClientUserSettingApi', () => {
     expect(apiList).not.toContain('llmClientUserSettingApi');
   });
+
+  /**
+   * Every RTK Query slice this package exports must also be declared here.
+   * The host app generates its store — reducers, middleware, and
+   * `resetApiState` wiring — solely from this list
+   * (`frontend/vite-plugins/dynamicStore.ts`), so a slice that is exported
+   * but unlisted is never registered: every hook that uses it throws at
+   * runtime in the host, while every test in this package passes, because
+   * each test builds its own `configureStore` with the slice registered by
+   * hand. That is exactly how `llmClientRunApi` (spec 070) shipped
+   * unregistered — the reachability check above cannot catch it, since
+   * `runApi.ts` is transitively imported by a routed component.
+   *
+   * The "unreachable" assertion above intentionally accepts either routing or
+   * api-listing; this one is the stricter rule for API slices specifically.
+   */
+  it('lists every *Api module exported from index.ts', () => {
+    const missing = [...exportedNameToModule.entries()]
+      // The slice binding itself (`llmClientRunApi` from `./runApi`), not the
+      // hooks a slice module also exports (`useConfirmApiCallMutation`).
+      .filter(([name, modulePath]) => !!modulePath && /Api$/.test(modulePath) && /Api$/.test(name))
+      .map(([name]) => name)
+      .filter((name) => !apiList.includes(name));
+
+    expect(missing, `exported from index.ts but missing from customFields.clarion.api: ${missing.join(', ')}`).toEqual([]);
+  });
 });

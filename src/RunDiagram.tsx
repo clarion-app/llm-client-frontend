@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   useGetRunQuery,
   useGetRunStepsQuery,
@@ -349,13 +350,30 @@ function StepContainer({ runId, step, maxDurationMs, autoExpand, onSelect }: Ste
 }
 
 export interface RunDiagramProps {
-  runId: string;
+  /**
+   * The run to render. Optional: the route registered in `package.json`'s
+   * `customFields.clarion.routes` is `/clarion-app/llm-client/runs/:id` and
+   * renders `<RunDiagram />` with no props (the host app generates its route
+   * table from that manifest — see `frontend/vite-plugins/dynamicRoutes.ts`),
+   * so the id comes from the `:id` route param whenever it isn't passed
+   * explicitly. `RunsList.tsx` navigates to exactly that path (US6 Acceptance
+   * Scenario 2 / SC-010: selecting a run opens that run's diagram).
+   */
+  runId?: string;
 }
 
-export function RunDiagram({ runId }: RunDiagramProps): React.ReactElement {
+export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.ReactElement {
   const [selected, setSelected] = useState<RunElementSelection | null>(null);
 
-  const { data: run, isLoading: runLoading, isError: runIsError, error: runError } = useGetRunQuery(runId);
+  // `useParams()` outside a Router returns `{}` rather than throwing, so a
+  // caller that passes `runId` explicitly (the tests, and any in-context
+  // embed) needs no router in scope.
+  const { id: routeRunId } = useParams<{ id?: string }>();
+  const runId = runIdProp ?? routeRunId ?? '';
+
+  const { data: run, isLoading: runLoading, isError: runIsError, error: runError } = useGetRunQuery(runId, {
+    skip: runId === '',
+  });
 
   const { data: stepsEnvelope, isLoading: stepsLoading, isError: stepsIsError, error: stepsError } =
     useGetRunStepsQuery({ runId }, { skip: !run });
@@ -364,6 +382,17 @@ export function RunDiagram({ runId }: RunDiagramProps): React.ReactElement {
   const stepsAcc = useAccumulatedPages<StepSummary>(stepsEnvelope, (page) =>
     triggerGetRunSteps({ runId, page }).unwrap(),
   );
+
+  // No id in the prop and none in the route — nothing to render but the same
+  // uniform "not available" state an absent/foreign run gets (FR-014); never
+  // an indefinite spinner.
+  if (runId === '') {
+    return (
+      <div data-testid="run-diagram-not-available">
+        This run is not available. It may not exist, may have been purged, or may belong to another user.
+      </div>
+    );
+  }
 
   if (isNotFoundError(runError) || isNotFoundError(stepsError)) {
     return (
