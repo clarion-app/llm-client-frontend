@@ -79,6 +79,10 @@
                 {
                     "path": "/clarion-app/llm-client/settings",
                     "element": "<ModelSetupRedirect />"
+                },
+                {
+                    "path": "/clarion-app/llm-client/runs/:id",
+                    "element": "<RunDiagram />"
                 }
             ],
             "menu": {

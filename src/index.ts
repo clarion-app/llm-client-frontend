@@ -10,10 +10,12 @@ import { ModelSetupRedirect } from "./ModelSetupRedirect";
 import Conversation from "./Conversation";
 import Conversations from "./Conversations";
 import ApiCallConfirmation from "./ApiCallConfirmation";
+import { runApi as llmClientRunApi } from "./runApi";
+import { RunDiagram } from "./RunDiagram";
 
 export { backend, updateFrontend } from './config';
 
-export { llmClientConversationApi, llmClientServerApi, llmClientModelApi, llmClientMessageApi, llmClientRoleAssignmentApi, llmClientServerStatusApi, useConfirmApiCallMutation, ApiCallConfirmation, Conversation, Conversations, ModelSetup, ModelSetupRedirect };
+export { llmClientConversationApi, llmClientServerApi, llmClientModelApi, llmClientMessageApi, llmClientRoleAssignmentApi, llmClientServerStatusApi, llmClientRunApi, useConfirmApiCallMutation, ApiCallConfirmation, Conversation, Conversations, ModelSetup, ModelSetupRedirect, RunDiagram };
 
 // Side-effect import: registers handler for ServerModelsRefreshed broadcasts
 import './serverStatusRealtime';
