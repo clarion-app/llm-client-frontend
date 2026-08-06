@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useGetRunQuery, useGetRunStepsQuery, useGetStepActionsQuery, useGetActionChildrenQuery } from './runApi';
 import { RunStepNode } from './RunStepNode';
 import { RunActionNode } from './RunActionNode';
@@ -16,12 +16,81 @@ import type { RunSummary, StepSummary, ActionSummary } from './types';
  * A run whose combined step+action count is small (research.md D5) is
  * auto-expanded on load so the "at a glance" experience (SC-001) holds for
  * the common case without requiring a click; larger runs stay collapsed
- * until the user expands a section explicitly. Phase 7 (US4) formalizes
- * this threshold with virtualization for very large runs — this is the
- * minimum viable version needed for US1.
+ * until the user expands a section explicitly. Phase 7 (US4) adds windowed
+ * rendering (`VirtualRow` below) on top of this so SC-003's "page remains
+ * responsive" holds at 500+ combined steps/actions, independent of the
+ * lazy-fetch behavior above.
  */
 
 const AUTO_EXPAND_THRESHOLD = 50;
+
+/**
+ * Below this many items, a list (the step list, or any one step's/action's
+ * expanded child list) renders every row directly — no observer, no
+ * placeholder rows, since there's nothing to bound. At or above it, T076/
+ * research.md D5's windowing applies: a row's full subtree mounts only once
+ * it's near the viewport, so DOM node count stays bounded independent of
+ * how many steps/actions are *logically* present. This is deliberately a
+ * separate constant from AUTO_EXPAND_THRESHOLD — that one governs *fetching*
+ * (combined run-level step+action count); this one governs *rendering*, per
+ * list, so a run with few steps but one step holding hundreds of actions
+ * (research.md D5's own example) still gets its action list windowed even
+ * though the step list itself never needs to be.
+ */
+const VIRTUALIZE_ROW_THRESHOLD = 50;
+
+/** Overscan margin so rows mount well before they'd actually enter the viewport, keeping scroll visually smooth. */
+const VIRTUALIZE_ROOT_MARGIN = '800px 0px';
+
+/**
+ * Reports whether `ref`'s element is near the viewport, via
+ * IntersectionObserver. When windowing isn't `active` for this list (below
+ * VIRTUALIZE_ROW_THRESHOLD), or IntersectionObserver isn't available in
+ * this environment, every row reports "near" and renders in full — jsdom
+ * (this package's test environment) doesn't implement IntersectionObserver,
+ * so this fallback also keeps every existing DOM-query-based test assertion
+ * valid without any test-specific branching in production code.
+ */
+function useNearViewport(active: boolean): [React.RefObject<HTMLDivElement>, boolean] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isNear, setIsNear] = useState(!active);
+
+  useEffect(() => {
+    if (!active || typeof IntersectionObserver === 'undefined' || !ref.current) {
+      setIsNear(true);
+      return;
+    }
+    setIsNear(false);
+    const el = ref.current;
+    const observer = new IntersectionObserver(([entry]) => setIsNear(entry.isIntersecting), {
+      rootMargin: VIRTUALIZE_ROOT_MARGIN,
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [active]);
+
+  return [ref, isNear];
+}
+
+interface VirtualRowProps {
+  /** Whether this row belongs to a list currently above VIRTUALIZE_ROW_THRESHOLD. */
+  active: boolean;
+  /** Reserved height for the collapsed placeholder, so the list's scroll extent doesn't jump as rows mount/unmount. */
+  placeholderHeight: number;
+  children: React.ReactNode;
+}
+
+/**
+ * Wraps one row of a steps/actions list. Renders `children` only once the
+ * row is near the viewport (or when windowing is inactive/unsupported);
+ * otherwise renders a height-preserving placeholder instead of the row's
+ * full subtree — the mechanism behind T076/SC-003's "page remains
+ * responsive" for very large runs.
+ */
+function VirtualRow({ active, placeholderHeight, children }: VirtualRowProps): React.ReactElement {
+  const [ref, isNear] = useNearViewport(active);
+  return <div ref={ref}>{isNear ? children : <div style={{ height: placeholderHeight }} aria-hidden="true" />}</div>;
+}
 
 function runStatusLabel(run: RunSummary): string {
   switch (run.end_state) {
@@ -111,15 +180,16 @@ function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand, on
     >
       {isExpanded &&
         children.map((child) => (
-          <ActionContainer
-            key={child.id}
-            runId={runId}
-            action={child}
-            maxDurationMs={childMaxDuration}
-            overlap={overlappingChildIds.has(child.id)}
-            autoExpand={autoExpand}
-            onSelect={onSelect}
-          />
+          <VirtualRow key={child.id} active={children.length > VIRTUALIZE_ROW_THRESHOLD} placeholderHeight={40}>
+            <ActionContainer
+              runId={runId}
+              action={child}
+              maxDurationMs={childMaxDuration}
+              overlap={overlappingChildIds.has(child.id)}
+              autoExpand={autoExpand}
+              onSelect={onSelect}
+            />
+          </VirtualRow>
         ))}
     </RunActionNode>
   );
@@ -156,15 +226,16 @@ function StepContainer({ runId, step, maxDurationMs, autoExpand, onSelect }: Ste
     >
       {isExpanded &&
         actions.map((action) => (
-          <ActionContainer
-            key={action.id}
-            runId={runId}
-            action={action}
-            maxDurationMs={actionMaxDuration}
-            overlap={overlappingIds.has(action.id)}
-            autoExpand={autoExpand}
-            onSelect={onSelect}
-          />
+          <VirtualRow key={action.id} active={actions.length > VIRTUALIZE_ROW_THRESHOLD} placeholderHeight={40}>
+            <ActionContainer
+              runId={runId}
+              action={action}
+              maxDurationMs={actionMaxDuration}
+              overlap={overlappingIds.has(action.id)}
+              autoExpand={autoExpand}
+              onSelect={onSelect}
+            />
+          </VirtualRow>
         ))}
     </RunStepNode>
   );
@@ -234,14 +305,15 @@ export function RunDiagram({ runId }: RunDiagramProps): React.ReactElement {
         <div className="run-diagram__body flex gap-4">
           <div className="run-diagram__steps flex-1">
             {steps.map((step) => (
-              <StepContainer
-                key={step.id}
-                runId={runId}
-                step={step}
-                maxDurationMs={stepMaxDuration}
-                autoExpand={isSmallRun}
-                onSelect={setSelected}
-              />
+              <VirtualRow key={step.id} active={steps.length > VIRTUALIZE_ROW_THRESHOLD} placeholderHeight={56}>
+                <StepContainer
+                  runId={runId}
+                  step={step}
+                  maxDurationMs={stepMaxDuration}
+                  autoExpand={isSmallRun}
+                  onSelect={setSelected}
+                />
+              </VirtualRow>
             ))}
           </div>
           <div className="run-diagram__detail w-80 shrink-0">
