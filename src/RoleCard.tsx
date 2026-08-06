@@ -4,7 +4,7 @@ import { RoleStatusLine } from './RoleStatusLine';
 import { InstallationDisclosure } from './InstallationDisclosure';
 import { ConfirmDialog } from './ConfirmDialog';
 import { TestRoleButton } from './TestRoleButton';
-import { RoleDescriptor, RoleEffective } from './types';
+import { RoleDescriptor } from './types';
 import { useSetRoleAssignmentMutation, useClearRoleAssignmentMutation } from './roleAssignmentApi';
 
 interface RoleCardProps {

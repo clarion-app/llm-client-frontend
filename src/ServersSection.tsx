@@ -22,7 +22,7 @@ interface ServersSectionProps {
  */
 export function ServersSection({ highlightedServerId }: ServersSectionProps = {}): React.ReactElement {
   const { data: servers = [], isLoading: isLoadingServers } = useGetServersQuery(null);
-  const { data: statuses = [] } = (useGetServerStatusesQuery() as { data: any[] });
+  const { data: statuses = [] } = useGetServerStatusesQuery();
   const { data: roleAssignments = null } = useGetRoleAssignmentsQuery(null);
 
   if (isLoadingServers) {

@@ -42,7 +42,7 @@ const { serverStatusApi } = await import('./serverStatusApi');
 const { modelApi } = await import('./modelApi');
 
 function createTestStore(capturedActions?: any[]) {
-  const actionCapturer = (api: any) => (next: any) => (action: any) => {
+  const actionCapturer = (_api: any) => (next: any) => (action: any) => {
     if (capturedActions) {
       capturedActions.push(action);
     }

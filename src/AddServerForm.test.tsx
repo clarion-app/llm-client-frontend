@@ -177,9 +177,10 @@ describe('AddServerForm', () => {
     // The form should show an in-flight indicator
     await waitFor(() => {
       // Check for in-flight indicator (spinner, "fetching..." text, etc.)
-      const inFlightIndicator = screen.queryByText(/fetching|loading|refreshing|in.?flight/i)
+      // Not asserted on directly — presence is timing-dependent (see comment below);
+      // getByTestId throws when absent, which is what drives waitFor's retry/timeout.
+      screen.queryByText(/fetching|loading|refreshing|in.?flight/i)
         ?? screen.getByTestId('in-flight-indicator');
-      // The indicator may or may not be present depending on timing
     }, { timeout: 2000 }).catch(() => {
       // If no in-flight indicator is shown, that's acceptable for the test
       // The key behavior is that the refresh happens in the background
@@ -192,10 +193,9 @@ describe('AddServerForm', () => {
 
     // The outcome should be displayed
     await waitFor(() => {
-      // Check for outcome indicator
-      const outcomeText = screen.queryByText(/models/i)
+      // Check for outcome indicator — not asserted directly (see comment above).
+      screen.queryByText(/models/i)
         ?? screen.queryByText(/5/i);
-      // The outcome may be shown as a badge, text, or count
     }, { timeout: 2000 }).catch(() => {
       // Acceptable if the outcome is just reflected in the server list
     });

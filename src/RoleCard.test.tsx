@@ -16,10 +16,8 @@ vi.mock('.', () => ({
 }));
 
 // Mock ModelPicker so RoleCard tests focus on RoleCard behavior, not ModelPicker internals.
-let mockModelPickerOnSelect: any = null;
 vi.mock('./ModelPicker', () => ({
   ModelPicker: ({ onSelect }: { onSelect: (value: any) => void }) => {
-    mockModelPickerOnSelect = onSelect;
     return (
       <div data-testid="model-picker">
         <button data-testid="open-model-picker" onClick={() => {}}>
@@ -156,7 +154,6 @@ function buildUnassignedRole(role: string): any {
 describe('RoleCard', () => {
   beforeEach(() => {
     capturedRequests = [];
-    mockModelPickerOnSelect = null;
   });
 
   describe('resolved state', () => {
@@ -298,7 +295,6 @@ describe('RoleCard', () => {
       };
 
       let interactionCount = 0;
-      const originalClick = fireEvent.click;
 
       const store = createTestStore();
       render(
@@ -621,9 +617,6 @@ describe('RoleCard', () => {
 
     describe('FR-025/FR-027: error handling', () => {
       it('surfaces error naming server/model on failed write', async () => {
-        // Override mock to simulate API error
-        const originalMock = vi.mocked(await import('@clarion-app/frontend-base'));
-
         mockRoleAssignments = {
           inference: buildResolvedRole('inference'),
           embedding: buildUnassignedRole('embedding'),

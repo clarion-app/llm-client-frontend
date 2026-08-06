@@ -33,7 +33,7 @@ const CodeBlock = ({ children, className = "" }: { children: string; className?:
   let html = "";
   try {
     html = Prism.highlight(children, Prism.languages[language], language);
-  } catch (e) {
+  } catch {
     html = children;
   }
 

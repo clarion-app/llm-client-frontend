@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useGetServersQuery } from './serverApi';
 import { useGetAllModelsQuery } from './modelApi';
-import { LanguageModelType } from './types';
 
 interface ModelOption {
   server_id: string;
@@ -23,9 +22,9 @@ interface ModelPickerProps {
  * - Selected option's value carries (server_id, model) — no code path selects by model name alone.
  * - SC-007: With 200 models across 5 servers, type → click assigns in ≤ 3 interactions.
  */
-export function ModelPicker({ onSelect, selectedValue, role }: ModelPickerProps): React.ReactElement {
+export function ModelPicker({ onSelect, selectedValue }: ModelPickerProps): React.ReactElement {
   const { data: servers = [] } = useGetServersQuery(null);
-  const { data: allModels = [] } = (useGetAllModelsQuery() as { data: any[] });
+  const { data: allModels = [] } = useGetAllModelsQuery();
 
   const [isOpen, setIsOpen] = useState(false);
   const [filterText, setFilterText] = useState('');

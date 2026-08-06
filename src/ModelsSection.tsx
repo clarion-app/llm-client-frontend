@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useGetAllModelsQuery } from './modelApi';
 import { useGetServersQuery } from './serverApi';
 import { useGetRoleAssignmentsQuery } from './roleAssignmentApi';
-import { LanguageModelType, RoleAssignmentsType } from './types';
+import { LanguageModelType } from './types';
 import { ModelSearchInput } from './ModelSearchInput';
 import { ServerModelGroup } from './ServerModelGroup';
 
@@ -15,9 +15,9 @@ import { ServerModelGroup } from './ServerModelGroup';
  * - Empty group headings disappear when filter narrows results.
  */
 export function ModelsSection(): React.ReactElement {
-  const { data: allModels = [] } = (useGetAllModelsQuery() as { data: any[] });
+  const { data: allModels = [] } = useGetAllModelsQuery();
   const { data: servers = [] } = useGetServersQuery(null);
-  const { data: roleAssignments } = (useGetRoleAssignmentsQuery(null) as { data: RoleAssignmentsType | null });
+  const { data: roleAssignments } = useGetRoleAssignmentsQuery(null);
   const [filterText, setFilterText] = useState('');
 
   // Build server name map

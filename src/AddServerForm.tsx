@@ -25,7 +25,7 @@ export function AddServerForm({ onSuccess }: AddServerFormProps = {}): React.Rea
   const [token, setToken] = useState('');
   const dispatch = useDispatch();
   const [createServer, { isLoading: isCreating }] = useCreateServerMutation();
-  const { data: serverStatuses = [] } = useGetServerStatusesQuery() as { data: any[] };
+  const { data: serverStatuses = [] } = useGetServerStatusesQuery();
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -33,7 +33,7 @@ export function AddServerForm({ onSuccess }: AddServerFormProps = {}): React.Rea
       if (!serverUrl.trim()) return;
 
       try {
-        const result = await createServer({
+        await createServer({
           name: name.trim() || serverUrl.trim(),
           server_url: serverUrl.trim(),
           provider_type: providerType,

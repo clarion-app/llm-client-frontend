@@ -25,6 +25,13 @@ interface ConversationPropsType {
   conversation_id?: string;
 }
 
+// RTK Query rejects with either a FetchBaseQueryError ({ status, ... }) or a
+// SerializedError — neither is imported here to keep this narrow; this guard
+// covers the one field both call sites below actually read.
+function hasNumericStatus(err: unknown): err is { status: number } {
+  return typeof err === "object" && err !== null && typeof (err as { status?: unknown }).status === "number";
+}
+
 export interface WebSocketMessageType {
   message_id: string;
   conversation_id: string;
@@ -141,7 +148,6 @@ const Conversation = (props: ConversationPropsType) => {
   };
 
   const updateConversation = async (isCommand: boolean) => {
-    let isNewConversation = false;
     let updateConversationId = conversationId;
     if (!updateConversationId) {
       try {
@@ -149,10 +155,9 @@ const Conversation = (props: ConversationPropsType) => {
           ? await createConversation(conversation).unwrap()
           : await createCommand({ command: newMessage }).unwrap();
         updateConversationId = result.id;
-        isNewConversation = true;
         setConversationId(updateConversationId);
-      } catch (err: any) {
-        if (err?.status === 422) {
+      } catch (err: unknown) {
+        if (hasNumericStatus(err) && err.status === 422) {
           errorLog("No inference model resolved for the conversation", err);
           alert("No inference model is assigned. Choose one in LLM settings — or add a server first if there are none.");
         } else {
@@ -233,7 +238,7 @@ const Conversation = (props: ConversationPropsType) => {
       )}
       {messagesLoading && <p>Loading messages...</p>}
       {messagesError && (() => {
-        const errStatus = (messagesErrorData as any)?.status;
+        const errStatus = hasNumericStatus(messagesErrorData) ? messagesErrorData.status : undefined;
         if (errStatus === 403) {
           errorLog("Permission denied for conversation", conversationId);
           return <p>You don't have permission to access this conversation.</p>;

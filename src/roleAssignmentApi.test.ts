@@ -10,7 +10,7 @@ vi.mock('.', () => ({
 }));
 
 let capturedRequests: any[] = [];
-let mockRoleAssignments: any = {
+const mockRoleAssignments: any = {
   inference: {
     role: 'inference',
     effective: {

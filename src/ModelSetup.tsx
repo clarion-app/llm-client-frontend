@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { useGetServersQuery } from './serverApi';
 import { useGetServerStatusesQuery } from './serverStatusApi';
 import { EmptyState } from './EmptyState';
@@ -19,12 +19,9 @@ import { useSearchParams } from 'react-router-dom';
 export function ModelSetup(): React.ReactElement {
   const [searchParams] = useSearchParams();
   const { data: servers = [], isLoading: isLoadingServers } = useGetServersQuery(null);
-  const { data: serverStatuses = [] } = (useGetServerStatusesQuery() as { data: any[] });
-
-  // Check if any server has an in_flight status
-  const hasInFlight = useMemo(() => {
-    return serverStatuses.some((s) => s.in_flight);
-  }, [serverStatuses]);
+  // Server-status polling (5s while any status is in_flight) lives in serverStatusApi
+  // itself; this screen just renders whatever the query currently holds.
+  useGetServerStatusesQuery();
 
   // Get the server ID from the query param
   const highlightedServerId = searchParams.get('server');
