@@ -213,13 +213,13 @@ describe('runRealtime — RunStepUpdated handler', () => {
 
   it('replaces an existing step in the cached step list in place, without an extra fetch', async () => {
     const store = createTestStore();
-    await store.dispatch(runApi.endpoints.getRunSteps.initiate(RUN_ID));
+    await store.dispatch(runApi.endpoints.getRunSteps.initiate({ runId: RUN_ID }));
     expect(stepsFetchCount).toBe(1);
 
     const pushed = makeStepSummary({ end_state: 'completed', ended_at: '2026-08-06T14:02:20.000000Z', duration_ms: 6000 });
     handlerFor('.ClarionApp\\LlmClient\\Events\\RunStepUpdated')(pushed, store.dispatch);
 
-    const cached = runApi.endpoints.getRunSteps.select(RUN_ID)(store.getState() as any).data;
+    const cached = runApi.endpoints.getRunSteps.select({ runId: RUN_ID })(store.getState() as any).data;
     expect(cached?.data).toHaveLength(1);
     expect(cached?.data[0]).toEqual(pushed);
     // Upsert, not a re-fetch of the whole list.
@@ -228,12 +228,12 @@ describe('runRealtime — RunStepUpdated handler', () => {
 
   it('appends a newly-opened step to an already-cached step list rather than dropping it', async () => {
     const store = createTestStore();
-    await store.dispatch(runApi.endpoints.getRunSteps.initiate(RUN_ID));
+    await store.dispatch(runApi.endpoints.getRunSteps.initiate({ runId: RUN_ID }));
 
     const newStep = makeStepSummary({ id: 'step-2', position: 2 });
     handlerFor('.ClarionApp\\LlmClient\\Events\\RunStepUpdated')(newStep, store.dispatch);
 
-    const cached = runApi.endpoints.getRunSteps.select(RUN_ID)(store.getState() as any).data;
+    const cached = runApi.endpoints.getRunSteps.select({ runId: RUN_ID })(store.getState() as any).data;
     const ids = cached?.data.map((s) => s.id);
     expect(ids).toEqual(expect.arrayContaining([STEP_ID, 'step-2']));
   });
@@ -245,7 +245,7 @@ describe('runRealtime — RunStepUpdated handler', () => {
       handlerFor('.ClarionApp\\LlmClient\\Events\\RunStepUpdated')(makeStepSummary({ run_id: 'run-elsewhere' }), store.dispatch),
     ).not.toThrow();
 
-    const cached = runApi.endpoints.getRunSteps.select('run-elsewhere')(store.getState() as any).data;
+    const cached = runApi.endpoints.getRunSteps.select({ runId: 'run-elsewhere' })(store.getState() as any).data;
     expect(cached).toBeUndefined();
   });
 });

@@ -53,7 +53,7 @@ registerUserChannelHandler({
     let patched = false;
 
     dispatch(
-      runApi.util.updateQueryData('getRunSteps', step.run_id, (draft) => {
+      runApi.util.updateQueryData('getRunSteps', { runId: step.run_id }, (draft) => {
         if (!draft) return;
 
         const idx = draft.data.findIndex((s) => s.id === step.id);

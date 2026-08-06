@@ -1,10 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useGetRunQuery, useGetRunStepsQuery, useGetStepActionsQuery, useGetActionChildrenQuery } from './runApi';
+import {
+  useGetRunQuery,
+  useGetRunStepsQuery,
+  useGetStepActionsQuery,
+  useGetActionChildrenQuery,
+  useLazyGetRunStepsQuery,
+  useLazyGetStepActionsQuery,
+  useLazyGetActionChildrenQuery,
+} from './runApi';
 import { RunStepNode } from './RunStepNode';
 import { RunActionNode } from './RunActionNode';
 import { RunElementDetail } from './RunElementDetail';
 import type { RunElementSelection } from './RunElementDetail';
-import type { RunSummary, StepSummary, ActionSummary } from './types';
+import type { RunSummary, StepSummary, ActionSummary, PaginatedEnvelope } from './types';
 
 /**
  * RunDiagram — orchestrates a run's diagram (US1): fetches the run summary
@@ -147,6 +155,81 @@ function maxDuration(items: Array<{ duration_ms: number | null }>): number {
   return Math.max(1, ...items.map((item) => item.duration_ms ?? 0));
 }
 
+interface AccumulatedPages<T> {
+  items: T[];
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  loadMore: () => void;
+}
+
+/**
+ * Accumulates a paginated list across "Load more" clicks (FR-012, US4
+ * Acceptance Scenario 4). The backend already supports `page`/`per_page` on
+ * all three list endpoints (contracts/run-read-api.md), but the diagram
+ * previously only ever fetched page 1 of the steps list, a step's actions,
+ * or an action's children — so anything beyond a list's first page was
+ * permanently unreachable in the UI even though the backend held it.
+ *
+ * `pageOneData` is the already-fetched first page (the normal
+ * `useGetXQuery` hook, unchanged — still its own RTK Query cache entry, so
+ * runRealtime.ts's live-update upserts into it keep working exactly as
+ * before). `fetchPage` requests one additional page (via the matching
+ * `useLazyGetXQuery` trigger) and its results are appended to local
+ * component state — a full re-fetch-and-replace of everything already
+ * loaded is neither needed nor desired.
+ */
+function useAccumulatedPages<T>(
+  pageOneData: PaginatedEnvelope<T> | undefined,
+  fetchPage: (page: number) => Promise<PaginatedEnvelope<T>>,
+): AccumulatedPages<T> {
+  const [extraItems, setExtraItems] = useState<T[]>([]);
+  const [pagesLoaded, setPagesLoaded] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const pageOneItems = pageOneData?.data ?? [];
+  const total = pageOneData?.meta.total ?? pageOneItems.length;
+  const items = extraItems.length === 0 ? pageOneItems : [...pageOneItems, ...extraItems];
+  const hasMore = items.length < total;
+
+  const loadMore = () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+    fetchPage(pagesLoaded + 1)
+      .then((envelope) => {
+        setExtraItems((prev) => [...prev, ...envelope.data]);
+        setPagesLoaded((p) => p + 1);
+        setIsLoadingMore(false);
+      })
+      .catch(() => {
+        setIsLoadingMore(false);
+      });
+  };
+
+  return { items, hasMore, isLoadingMore, loadMore };
+}
+
+interface LoadMoreButtonProps {
+  testId: string;
+  label: string;
+  acc: AccumulatedPages<unknown>;
+}
+
+/** Shared "Load more" affordance for the steps list, a step's action list, and an action's children list (FR-012). */
+function LoadMoreButton({ testId, label, acc }: LoadMoreButtonProps): React.ReactElement | null {
+  if (!acc.hasMore) return null;
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      onClick={acc.loadMore}
+      disabled={acc.isLoadingMore}
+      className="run-diagram__load-more text-sm text-blue-700 underline mt-1 mb-2"
+    >
+      {acc.isLoadingMore ? 'Loading…' : label}
+    </button>
+  );
+}
+
 interface ActionContainerProps {
   runId: string;
   action: ActionSummary;
@@ -165,7 +248,11 @@ function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand, on
     { runId, actionId: action.id },
     { skip: !isExpanded },
   );
-  const children = childrenEnvelope?.data ?? [];
+  const [triggerGetActionChildren] = useLazyGetActionChildrenQuery();
+  const childrenAcc = useAccumulatedPages<ActionSummary>(childrenEnvelope, (page) =>
+    triggerGetActionChildren({ runId, actionId: action.id, page }).unwrap(),
+  );
+  const children = childrenAcc.items;
   const childMaxDuration = maxDuration(children);
   const overlappingChildIds = computeOverlappingIds(children);
 
@@ -178,19 +265,27 @@ function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand, on
       onToggleExpand={() => setManuallyExpanded((v) => !v)}
       onSelect={() => onSelect({ type: 'action', actionId: action.id })}
     >
-      {isExpanded &&
-        children.map((child) => (
-          <VirtualRow key={child.id} active={children.length > VIRTUALIZE_ROW_THRESHOLD} placeholderHeight={40}>
-            <ActionContainer
-              runId={runId}
-              action={child}
-              maxDurationMs={childMaxDuration}
-              overlap={overlappingChildIds.has(child.id)}
-              autoExpand={autoExpand}
-              onSelect={onSelect}
-            />
-          </VirtualRow>
-        ))}
+      {isExpanded && (
+        <>
+          {children.map((child) => (
+            <VirtualRow key={child.id} active={children.length > VIRTUALIZE_ROW_THRESHOLD} placeholderHeight={40}>
+              <ActionContainer
+                runId={runId}
+                action={child}
+                maxDurationMs={childMaxDuration}
+                overlap={overlappingChildIds.has(child.id)}
+                autoExpand={autoExpand}
+                onSelect={onSelect}
+              />
+            </VirtualRow>
+          ))}
+          <LoadMoreButton
+            testId={`run-action-children-load-more-${action.id}`}
+            label="Load more"
+            acc={childrenAcc}
+          />
+        </>
+      )}
     </RunActionNode>
   );
 }
@@ -212,7 +307,11 @@ function StepContainer({ runId, step, maxDurationMs, autoExpand, onSelect }: Ste
     { runId, stepId: step.id },
     { skip: !isExpanded },
   );
-  const actions = actionsEnvelope?.data ?? [];
+  const [triggerGetStepActions] = useLazyGetStepActionsQuery();
+  const actionsAcc = useAccumulatedPages<ActionSummary>(actionsEnvelope, (page) =>
+    triggerGetStepActions({ runId, stepId: step.id, page }).unwrap(),
+  );
+  const actions = actionsAcc.items;
   const actionMaxDuration = maxDuration(actions);
   const overlappingIds = computeOverlappingIds(actions);
 
@@ -224,19 +323,27 @@ function StepContainer({ runId, step, maxDurationMs, autoExpand, onSelect }: Ste
       onToggleExpand={() => setManuallyExpanded((v) => !v)}
       onSelect={() => onSelect({ type: 'step', step })}
     >
-      {isExpanded &&
-        actions.map((action) => (
-          <VirtualRow key={action.id} active={actions.length > VIRTUALIZE_ROW_THRESHOLD} placeholderHeight={40}>
-            <ActionContainer
-              runId={runId}
-              action={action}
-              maxDurationMs={actionMaxDuration}
-              overlap={overlappingIds.has(action.id)}
-              autoExpand={autoExpand}
-              onSelect={onSelect}
-            />
-          </VirtualRow>
-        ))}
+      {isExpanded && (
+        <>
+          {actions.map((action) => (
+            <VirtualRow key={action.id} active={actions.length > VIRTUALIZE_ROW_THRESHOLD} placeholderHeight={40}>
+              <ActionContainer
+                runId={runId}
+                action={action}
+                maxDurationMs={actionMaxDuration}
+                overlap={overlappingIds.has(action.id)}
+                autoExpand={autoExpand}
+                onSelect={onSelect}
+              />
+            </VirtualRow>
+          ))}
+          <LoadMoreButton
+            testId={`run-step-actions-load-more-${step.id}`}
+            label="Load more"
+            acc={actionsAcc}
+          />
+        </>
+      )}
     </RunStepNode>
   );
 }
@@ -251,7 +358,12 @@ export function RunDiagram({ runId }: RunDiagramProps): React.ReactElement {
   const { data: run, isLoading: runLoading, isError: runIsError, error: runError } = useGetRunQuery(runId);
 
   const { data: stepsEnvelope, isLoading: stepsLoading, isError: stepsIsError, error: stepsError } =
-    useGetRunStepsQuery(runId, { skip: !run });
+    useGetRunStepsQuery({ runId }, { skip: !run });
+
+  const [triggerGetRunSteps] = useLazyGetRunStepsQuery();
+  const stepsAcc = useAccumulatedPages<StepSummary>(stepsEnvelope, (page) =>
+    triggerGetRunSteps({ runId, page }).unwrap(),
+  );
 
   if (isNotFoundError(runError) || isNotFoundError(stepsError)) {
     return (
@@ -283,7 +395,7 @@ export function RunDiagram({ runId }: RunDiagramProps): React.ReactElement {
     return <div data-testid="run-diagram">Loading…</div>;
   }
 
-  const steps = stepsEnvelope.data;
+  const steps = stepsAcc.items;
   const isSmallRun = run.step_count + run.action_count <= AUTO_EXPAND_THRESHOLD;
   const stepMaxDuration = maxDuration(steps);
 
@@ -315,6 +427,7 @@ export function RunDiagram({ runId }: RunDiagramProps): React.ReactElement {
                 />
               </VirtualRow>
             ))}
+            <LoadMoreButton testId="run-steps-load-more" label="Load more steps" acc={stepsAcc} />
           </div>
           <div className="run-diagram__detail w-80 shrink-0">
             <RunElementDetail runId={runId} selected={selected} />
