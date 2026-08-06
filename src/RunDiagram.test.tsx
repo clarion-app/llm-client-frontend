@@ -445,4 +445,55 @@ describe('RunDiagram', () => {
 
     expect(screen.queryByTestId(/^run-step-/)).not.toBeInTheDocument();
   });
+
+  it('never leaves previously-fetched step data visible once a 404 arrives for a run that was viewable a moment ago (Phase 5, T047)', async () => {
+    // Phase 5 (T047), US5 — distinct from the "404 from the very first
+    // fetch" case above: this run was successfully viewed (its steps were
+    // fetched and rendered) before it became inaccessible — e.g. purged, or
+    // ownership no longer resolves the same way — and the diagram is
+    // reopened. The RTK Query cache already holds the prior fulfilled
+    // result for this exact runId; the assertion is that a fresh 404
+    // replaces that cached state entirely rather than the stale step nodes
+    // lingering underneath/alongside the not-available message.
+    const store = createTestStore();
+
+    mockRun = makeRun({ id: 'run-1', step_count: 1, action_count: 0 });
+    mockSteps = [makeStep({ id: 'step-was-visible', run_id: 'run-1', position: 1 })];
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <RunDiagram runId="run-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+
+    // Confirm real, rendered data was on screen before anything changes.
+    await waitFor(() => {
+      expect(screen.getByTestId('run-step-step-was-visible')).toBeInTheDocument();
+    });
+
+    unmount();
+
+    // The run is no longer accessible by the time the view is reopened.
+    mockRun = null;
+    mockSteps = [];
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <RunDiagram runId="run-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('run-diagram-not-available')).toBeInTheDocument();
+    });
+
+    // The previously-rendered step must not still be present anywhere —
+    // neither as a leftover DOM node nor reintroduced via stale cache data.
+    expect(screen.queryByTestId('run-step-step-was-visible')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(/^run-step-/)).not.toBeInTheDocument();
+  });
 });
