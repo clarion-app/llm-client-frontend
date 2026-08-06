@@ -107,3 +107,70 @@ export interface ClearRoleAssignmentRequest {
   role: 'inference' | 'embedding' | 'image';
   scope: 'user' | 'installation';
 }
+
+// Run execution graph types (data-model.md §1.1-§1.5)
+
+export type RunKind = 'interactive' | 'system_initiated';
+
+export type RunEndState = 'in_progress' | 'completed' | 'failed' | 'stopped_early' | 'abandoned';
+
+export type ActionType = 'llm_request' | 'tool_invocation' | 'context_reshape';
+
+export type ActionOutcome = 'in_progress' | 'awaiting_confirmation' | 'success' | 'failure' | 'unfinished';
+
+export interface RunSummary {
+  id: string;
+  kind: RunKind;
+  end_state: RunEndState;
+  end_reason: string | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number | null;
+  step_count: number;
+  action_count: number;
+  conversation_id: string | null;
+}
+
+export interface StepSummary {
+  id: string;
+  run_id: string;
+  position: number;
+  end_state: RunEndState;
+  end_reason: string | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number | null;
+  wait_ms: number | null;
+  attempt_count: number;
+  action_count: number;
+}
+
+export interface ActionSummary {
+  id: string;
+  run_id: string;
+  step_id: string;
+  parent_action_id: string | null;
+  action_type: ActionType;
+  target: string | null;
+  outcome: ActionOutcome;
+  failure_reason: string | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number | null;
+  has_children: boolean;
+}
+
+export interface ActionDetail extends ActionSummary {
+  content: string | null;
+  content_truncated: boolean;
+}
+
+export interface PaginatedEnvelope<T> {
+  data: T[];
+  meta: {
+    current_page: number;
+    per_page: number;
+    total: number;
+    last_page: number;
+  };
+}
