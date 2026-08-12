@@ -93,6 +93,14 @@
                 {
                     "path": "/clarion-app/llm-client/eval-dashboard/:agentLabel",
                     "element": "<EvalDashboard />"
+                },
+                {
+                    "path": "/clarion-app/llm-client/eval-runs/:runId",
+                    "element": "<EvalRunBreakdown />"
+                },
+                {
+                    "path": "/clarion-app/llm-client/eval-runs/:runId/cases/:caseResultId",
+                    "element": "<EvalCaseDetail />"
                 }
             ],
             "menu": {

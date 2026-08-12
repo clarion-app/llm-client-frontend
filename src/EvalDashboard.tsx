@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useGetOverviewQuery } from './evalDashboardApi';
 import { EvalTrendChart } from './EvalTrendChart';
 import { EvalPersistentFailuresList } from './EvalPersistentFailuresList';
@@ -64,6 +64,12 @@ export function EvalDashboard({ agentLabel: agentLabelProp }: EvalDashboardProps
           <div data-testid="eval-dashboard-pass-rate">
             {Math.round(data.current_pass_rate.pass_rate * 100)}%
           </div>
+          <Link
+            data-testid="eval-dashboard-current-run-link"
+            to={`/clarion-app/llm-client/eval-runs/${data.current_pass_rate.run_id}`}
+          >
+            View most recent run
+          </Link>
           <EvalTrendChart buckets={data.trend.buckets} />
           <EvalPersistentFailuresList failures={data.persistent_failures} />
         </>

@@ -258,3 +258,61 @@ export interface CaseDetail {
   error_message: string | null;
   created_at: string;
 }
+
+// Run breakdown types (US2 drill-down) — the existing, unmodified
+// GET /eval-runs/{runId} and GET /eval-runs/{runId}/cases response shapes
+// (contracts/eval-dashboard-api.md §3, EvalRunController::formatRunDetail()/
+// formatCaseResult()), given their own names here since this package had no
+// eval-run-detail types before this feature.
+
+export interface EvalOutcomeCounts {
+  pass: number;
+  fail: number;
+  needs_human_review: number;
+  errored: number;
+  unjudged: number;
+}
+
+export interface EvalRunConsumption {
+  total_cost: number | null;
+  cost_currency: string | null;
+  cost_unpriced: boolean;
+  total_tokens: number;
+  tool_invocation_count: number;
+  total_duration_ms: number;
+  judging: {
+    total_cost: number | null;
+    total_tokens: number;
+    invocation_count: number;
+    cost_unpriced: boolean;
+  };
+}
+
+export interface EvalRunDetail {
+  id: string;
+  suite_id: string;
+  agent_label: string;
+  status: string;
+  case_count: number;
+  completed_count: number;
+  remaining_count: number;
+  started_at: string | null;
+  completed_at: string | null;
+  failure_reason: string | null;
+  overall: string;
+  outcome_counts: EvalOutcomeCounts;
+  consumption: EvalRunConsumption;
+}
+
+export interface EvalCaseResultSummary {
+  id: string;
+  eval_case_id: string;
+  eval_case_version_id: string;
+  outcome: EvalCaseOutcome;
+  outcome_override: EvalCaseOutcome | null;
+  produced_response: string | null;
+  attempted_actions: Array<{ tool: string; arguments: Record<string, unknown> }>;
+  expectation_results: ExpectationResultDetail[];
+  error_message: string | null;
+  created_at: string;
+}
