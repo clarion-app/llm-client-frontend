@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -36,6 +36,21 @@ import type { PaginatedEnvelope } from './types';
  *     not-found)
  */
 
+interface MockRunConsumption {
+  total_cost: number | null;
+  cost_currency: string | null;
+  cost_unpriced: boolean;
+  total_tokens: number;
+  tool_invocation_count: number;
+  total_duration_ms: number;
+  judging: {
+    total_cost: number | null;
+    total_tokens: number;
+    invocation_count: number;
+    cost_unpriced: boolean;
+  };
+}
+
 interface MockRunDetail {
   id: string;
   agent_label: string;
@@ -50,6 +65,7 @@ interface MockRunDetail {
     errored: number;
     unjudged: number;
   };
+  consumption: MockRunConsumption;
 }
 
 interface MockCaseResult {
@@ -122,7 +138,7 @@ function createTestStore() {
 
 function renderBreakdown(runId: string) {
   const store = createTestStore();
-  return render(
+  const view = render(
     <MemoryRouter initialEntries={[`/clarion-app/llm-client/eval-runs/${runId}`]}>
       <Provider store={store}>
         <Routes>
@@ -135,6 +151,25 @@ function renderBreakdown(runId: string) {
       </Provider>
     </MemoryRouter>,
   );
+  return { ...view, store };
+}
+
+function makeConsumption(overrides: Partial<MockRunConsumption> = {}): MockRunConsumption {
+  return {
+    total_cost: 0.42,
+    cost_currency: 'USD',
+    cost_unpriced: false,
+    total_tokens: 150,
+    tool_invocation_count: 3,
+    total_duration_ms: 4200,
+    judging: {
+      total_cost: 0.05,
+      total_tokens: 20,
+      invocation_count: 1,
+      cost_unpriced: false,
+    },
+    ...overrides,
+  };
 }
 
 function makeRunDetail(overrides: Partial<MockRunDetail> = {}): MockRunDetail {
@@ -146,6 +181,7 @@ function makeRunDetail(overrides: Partial<MockRunDetail> = {}): MockRunDetail {
     completed_count: 2,
     remaining_count: 0,
     outcome_counts: { pass: 1, fail: 1, needs_human_review: 0, errored: 0, unjudged: 0 },
+    consumption: makeConsumption(),
     ...overrides,
   };
 }
@@ -219,5 +255,102 @@ describe('EvalRunBreakdown', () => {
     });
     expect(screen.queryByTestId('eval-run-breakdown')).not.toBeInTheDocument();
     expect(screen.queryByTestId('eval-run-breakdown-not-available')).not.toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------
+  // Weighing quality against cost — the consumption block already
+  // carried by getRunDetail is rendered alongside the outcome counts,
+  // not on a separate screen.
+  // -----------------------------------------------------------------
+
+  it('renders the consumption block alongside the outcome counts, not on a separate screen', async () => {
+    mockRunsById['run-1'] = makeRunDetail({
+      consumption: makeConsumption({
+        total_cost: 1.23,
+        total_tokens: 4500,
+        tool_invocation_count: 7,
+        total_duration_ms: 9000,
+        judging: { total_cost: 0.11, total_tokens: 300, invocation_count: 2, cost_unpriced: false },
+      }),
+    });
+    mockCasesByRunId['run-1'] = makeCasesEnvelope([
+      { id: 'result-1', eval_case_id: 'case-1', outcome: 'pass', outcome_override: null },
+    ]);
+
+    renderBreakdown('run-1');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('eval-run-breakdown')).toBeInTheDocument();
+    });
+
+    const consumption = await screen.findByTestId('eval-run-breakdown-consumption');
+    expect(consumption).toBeInTheDocument();
+    expect(within(consumption).getByTestId('eval-run-breakdown-consumption-total-cost')).toHaveTextContent('1.23');
+    expect(within(consumption).getByTestId('eval-run-breakdown-consumption-total-tokens')).toHaveTextContent('4500');
+    expect(within(consumption).getByTestId('eval-run-breakdown-consumption-tool-invocation-count')).toHaveTextContent('7');
+    expect(within(consumption).getByTestId('eval-run-breakdown-consumption-total-duration-ms')).toHaveTextContent('9000');
+    expect(within(consumption).getByTestId('eval-run-breakdown-consumption-judging-total-cost')).toHaveTextContent('0.11');
+    expect(within(consumption).getByTestId('eval-run-breakdown-consumption-judging-total-tokens')).toHaveTextContent('300');
+    expect(within(consumption).getByTestId('eval-run-breakdown-consumption-judging-invocation-count')).toHaveTextContent('2');
+
+    // Rendered in the same root container as the outcome counts, never a
+    // second screen the operator has to navigate to separately.
+    expect(within(screen.getByTestId('eval-run-breakdown')).getByTestId('eval-run-breakdown-consumption')).toBeInTheDocument();
+    expect(within(screen.getByTestId('eval-run-breakdown')).getByTestId('eval-run-breakdown-outcome-counts')).toBeInTheDocument();
+  });
+
+  it('shows growing partial consumption for a run still in progress, with no separate zero/absent state', async () => {
+    mockRunsById['run-1'] = makeRunDetail({
+      status: 'in_progress',
+      completed_count: 1,
+      remaining_count: 3,
+      consumption: makeConsumption({ total_cost: 0.1, total_tokens: 150 }),
+    });
+    mockCasesByRunId['run-1'] = makeCasesEnvelope([
+      { id: 'result-1', eval_case_id: 'case-1', outcome: 'pass', outcome_override: null },
+    ]);
+
+    renderBreakdown('run-1');
+
+    const consumption = await screen.findByTestId('eval-run-breakdown-consumption');
+    expect(within(consumption).getByTestId('eval-run-breakdown-consumption-total-tokens')).toHaveTextContent('150');
+  });
+
+  it('updates the rendered consumption figures live when EvalRunUpdated patches the cached run detail, without a manual reload', async () => {
+    mockRunsById['run-1'] = makeRunDetail({
+      status: 'in_progress',
+      completed_count: 1,
+      remaining_count: 3,
+      consumption: makeConsumption({ total_cost: 0.1, total_tokens: 150 }),
+    });
+    mockCasesByRunId['run-1'] = makeCasesEnvelope([
+      { id: 'result-1', eval_case_id: 'case-1', outcome: 'pass', outcome_override: null },
+    ]);
+
+    const { store } = renderBreakdown('run-1');
+
+    const consumption = await screen.findByTestId('eval-run-breakdown-consumption');
+    expect(within(consumption).getByTestId('eval-run-breakdown-consumption-total-tokens')).toHaveTextContent('150');
+
+    // The exact patch shape evalDashboardRealtime.ts applies on a live
+    // EvalRunUpdated push: Object.assign(draft, run) against the cached
+    // getRunDetail entry — reused here directly rather than re-driving a
+    // full realtime subscription, since that mechanism is already proven
+    // by evalDashboardRealtime.test.ts; this test only proves the screen
+    // reflects the patched cache without a reload.
+    store.dispatch(
+      evalDashboardApi.util.updateQueryData('getRunDetail', 'run-1', (draft) => {
+        Object.assign(draft, makeRunDetail({
+          status: 'in_progress',
+          completed_count: 2,
+          remaining_count: 2,
+          consumption: makeConsumption({ total_cost: 0.2, total_tokens: 300 }),
+        }));
+      }),
+    );
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId('eval-run-breakdown-consumption')).getByTestId('eval-run-breakdown-consumption-total-tokens')).toHaveTextContent('300');
+    });
   });
 });

@@ -2,9 +2,62 @@ import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGetRunCasesQuery, useGetRunDetailQuery } from './evalDashboardApi';
 import { EvalOutcomeBadge } from './EvalOutcomeBadge';
+import type { EvalRunConsumption } from './types';
 
 interface EvalRunBreakdownProps {
   runId?: string;
+}
+
+function formatCost(cost: number | null, unpriced: boolean): string {
+  if (unpriced || cost === null) return 'unpriced';
+  return `$${cost.toFixed(2)}`;
+}
+
+/**
+ * What a run consumed to produce its results, alongside — never instead
+ * of — its outcome counts. Meaningful at any run status: a run still in
+ * progress shows partial, growing consumption for the cases completed so
+ * far, never a zero/absent placeholder while cases remain outstanding.
+ * The agent-under-test's own figures and what rubric judging separately
+ * consumed are kept visibly distinct, never summed together.
+ */
+function EvalRunConsumptionSummary({ consumption }: { consumption: EvalRunConsumption }): React.ReactElement {
+  return (
+    <div data-testid="eval-run-breakdown-consumption" style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+      <div>
+        <span data-testid="eval-run-breakdown-consumption-total-cost">
+          {formatCost(consumption.total_cost, consumption.cost_unpriced)}
+        </span>
+      </div>
+      <div>
+        <span data-testid="eval-run-breakdown-consumption-total-tokens">{consumption.total_tokens} tokens</span>
+      </div>
+      <div>
+        <span data-testid="eval-run-breakdown-consumption-tool-invocation-count">
+          {consumption.tool_invocation_count} tool calls
+        </span>
+      </div>
+      <div>
+        <span data-testid="eval-run-breakdown-consumption-total-duration-ms">
+          {consumption.total_duration_ms} ms
+        </span>
+      </div>
+      <div>
+        <span>Judging: </span>
+        <span data-testid="eval-run-breakdown-consumption-judging-total-cost">
+          {formatCost(consumption.judging.total_cost, consumption.judging.cost_unpriced)}
+        </span>
+        {' · '}
+        <span data-testid="eval-run-breakdown-consumption-judging-total-tokens">
+          {consumption.judging.total_tokens} tokens
+        </span>
+        {' · '}
+        <span data-testid="eval-run-breakdown-consumption-judging-invocation-count">
+          {consumption.judging.invocation_count} calls
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function isForbiddenError(error: unknown): boolean {
@@ -69,6 +122,7 @@ export function EvalRunBreakdown({ runId: runIdProp }: EvalRunBreakdownProps = {
           </span>
         ))}
       </div>
+      <EvalRunConsumptionSummary consumption={run.consumption} />
       <div>
         {cases.map((caseResult) => (
           <div
