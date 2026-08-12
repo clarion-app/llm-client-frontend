@@ -174,3 +174,87 @@ export interface PaginatedEnvelope<T> {
     last_page: number;
   };
 }
+
+// Eval dashboard types (contracts/eval-dashboard-api.md §1-§2)
+
+export type EvalCaseOutcome = 'pass' | 'fail' | 'needs_human_review' | 'errored' | 'unjudged';
+
+export type ExpectationKind =
+  | 'text_match'
+  | 'information_present'
+  | 'action_taken'
+  | 'action_not_taken'
+  | 'human_judgment'
+  | 'rubric_judgment';
+
+export interface PassRateSnapshot {
+  run_id: string;
+  pass_rate: number;
+  pass_count: number;
+  fail_count: number;
+  errored_count: number;
+  needs_human_review_count: number;
+  unjudged_count: number;
+  completed_at: string;
+}
+
+export interface TrendBucket {
+  period_date: string;
+  pass_count: number;
+  fail_count: number;
+  needs_human_review_count: number;
+  errored_count: number;
+  unjudged_count: number;
+  total_count: number;
+}
+
+export interface PersistentFailure {
+  eval_case_id: string;
+  fail_count: number;
+  total_count: number;
+  fail_rate: number;
+}
+
+export interface AgentQualityOverview {
+  agent_label: string;
+  current_pass_rate: PassRateSnapshot | null;
+  trend: {
+    window_days: number;
+    buckets: TrendBucket[];
+  };
+  persistent_failures: PersistentFailure[];
+}
+
+export interface JudgmentDetail {
+  score: number;
+  justification: string;
+  overridden: boolean;
+  overridden_by: string | null;
+  overridden_at: string | null;
+}
+
+export interface ExpectationResultDetail {
+  kind: ExpectationKind;
+  criteria: string;
+  met: boolean;
+  score?: number;
+  status?: string;
+  judgment_id?: string;
+  judgment?: JudgmentDetail;
+}
+
+export interface CaseDetail {
+  id: string;
+  run_id: string;
+  eval_case_id: string;
+  eval_case_version_id: string;
+  given: string;
+  expected_behavior: string;
+  outcome: EvalCaseOutcome;
+  outcome_override: EvalCaseOutcome | null;
+  produced_response: string | null;
+  attempted_actions: Array<{ tool: string; arguments: Record<string, unknown> }>;
+  expectation_results: ExpectationResultDetail[];
+  error_message: string | null;
+  created_at: string;
+}
