@@ -27,3 +27,6 @@ import './serverStatusRealtime';
 
 // Side-effect import: registers handlers for RunUpdated/RunStepUpdated/RunActionUpdated broadcasts
 import './runRealtime';
+
+// Side-effect import: registers handlers for EvalRunUpdated/EvalRunCaseResultRecorded broadcasts
+import './evalDashboardRealtime';
