@@ -5,7 +5,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { evalDashboardApi } from './evalDashboardApi';
-import type { PaginatedEnvelope } from './types';
+import type { LaravelPaginated } from './types';
 
 /**
  * EvalRunBreakdown.tsx does not exist yet -- this file is written first,
@@ -55,6 +55,7 @@ interface MockRunDetail {
   id: string;
   agent_label: string;
   status: string;
+  failure_reason: string | null;
   case_count: number;
   completed_count: number;
   remaining_count: number;
@@ -85,7 +86,9 @@ vi.mock('./config', () => ({
 }));
 
 let mockRunsById: Record<string, MockRunDetail | { __forbidden: true }> = {};
-let mockCasesByRunId: Record<string, PaginatedEnvelope<MockCaseResult> | { __forbidden: true }> = {};
+let mockCasesByRunId: Record<string, LaravelPaginated<MockCaseResult> | { __forbidden: true }> = {};
+/** Pages past the first, keyed `${runId}:${page}` — what `?page=N` returns. */
+let mockCasePagesByRunId: Record<string, LaravelPaginated<MockCaseResult>> = {};
 
 vi.mock('@clarion-app/frontend-base', () => ({
   createBackendConfig: () => ({
@@ -96,8 +99,17 @@ vi.mock('@clarion-app/frontend-base', () => ({
     const url = typeof args === 'string' ? args : (args?.url ?? '');
     const path = String(url).split('?')[0];
 
+    const requestedPage = Number(new URLSearchParams(String(url).split('?')[1] ?? '').get('page') ?? '1');
+
     const casesMatch = path.match(/^\/eval-runs\/([^/]+)\/cases$/);
     if (casesMatch) {
+      if (requestedPage > 1) {
+        const page = mockCasePagesByRunId[`${casesMatch[1]}:${requestedPage}`];
+        if (!page) {
+          return { error: { status: 404, data: { message: 'Not found.' } } };
+        }
+        return { data: page };
+      }
       const entry = mockCasesByRunId[casesMatch[1]];
       if (!entry) {
         return { error: { status: 404, data: { message: 'Not found.' } } };
@@ -177,6 +189,7 @@ function makeRunDetail(overrides: Partial<MockRunDetail> = {}): MockRunDetail {
     id: 'run-1',
     agent_label: 'quality-agent',
     status: 'completed',
+    failure_reason: null,
     case_count: 2,
     completed_count: 2,
     remaining_count: 0,
@@ -186,10 +199,22 @@ function makeRunDetail(overrides: Partial<MockRunDetail> = {}): MockRunDetail {
   };
 }
 
-function makeCasesEnvelope(cases: MockCaseResult[]): PaginatedEnvelope<MockCaseResult> {
+/**
+ * The exact body Laravel's own paginator serializes to for
+ * GET /eval-runs/{runId}/cases — page metadata at the top level alongside
+ * `data`, never nested under a `meta` key.
+ */
+function makeCasesEnvelope(
+  cases: MockCaseResult[],
+  overrides: Partial<Omit<LaravelPaginated<MockCaseResult>, 'data'>> = {},
+): LaravelPaginated<MockCaseResult> {
   return {
     data: cases,
-    meta: { current_page: 1, per_page: 25, total: cases.length, last_page: 1 },
+    current_page: 1,
+    per_page: 25,
+    total: cases.length,
+    last_page: 1,
+    ...overrides,
   };
 }
 
@@ -197,6 +222,7 @@ describe('EvalRunBreakdown', () => {
   beforeEach(() => {
     mockRunsById = {};
     mockCasesByRunId = {};
+    mockCasePagesByRunId = {};
   });
 
   it('renders a run\'s per-case results, each with its own EvalOutcomeBadge', async () => {
@@ -217,6 +243,80 @@ describe('EvalRunBreakdown', () => {
 
     const rowTwo = screen.getByTestId('eval-run-breakdown-case-row-result-2');
     expect(rowTwo.querySelector('[data-testid="eval-outcome-badge-fail"]')).not.toBeNull();
+  });
+
+  it('reaches cases past the first page — a run with more cases than one page holds is fully browsable, not silently truncated', async () => {
+    mockRunsById['big-run'] = makeRunDetail({ id: 'big-run', case_count: 3, completed_count: 3 });
+    mockCasesByRunId['big-run'] = makeCasesEnvelope(
+      [
+        { id: 'result-1', eval_case_id: 'case-1', outcome: 'pass', outcome_override: null },
+        { id: 'result-2', eval_case_id: 'case-2', outcome: 'fail', outcome_override: null },
+      ],
+      { per_page: 2, total: 3, last_page: 2 },
+    );
+    mockCasePagesByRunId['big-run:2'] = makeCasesEnvelope(
+      [{ id: 'result-3', eval_case_id: 'case-3', outcome: 'needs_human_review', outcome_override: null }],
+      { current_page: 2, per_page: 2, total: 3, last_page: 2 },
+    );
+
+    renderBreakdown('big-run');
+
+    await screen.findByTestId('eval-run-breakdown-case-row-result-1');
+    expect(screen.queryByTestId('eval-run-breakdown-case-row-result-3')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('eval-run-breakdown-load-more-cases'));
+
+    // The second page's case joins the first page's, rather than replacing it.
+    expect(await screen.findByTestId('eval-run-breakdown-case-row-result-3')).toBeInTheDocument();
+    expect(screen.getByTestId('eval-run-breakdown-case-row-result-1')).toBeInTheDocument();
+    expect(screen.getByTestId('eval-run-breakdown-case-row-result-2')).toBeInTheDocument();
+
+    // Nothing left unreached, so the affordance retires.
+    await waitFor(() => {
+      expect(screen.queryByTestId('eval-run-breakdown-load-more-cases')).not.toBeInTheDocument();
+    });
+  });
+
+  it('offers no "load more" affordance when a single page already holds every case', async () => {
+    mockRunsById['run-1'] = makeRunDetail();
+    mockCasesByRunId['run-1'] = makeCasesEnvelope([
+      { id: 'result-1', eval_case_id: 'case-1', outcome: 'pass', outcome_override: null },
+    ]);
+
+    renderBreakdown('run-1');
+
+    await screen.findByTestId('eval-run-breakdown-case-row-result-1');
+    expect(screen.queryByTestId('eval-run-breakdown-load-more-cases')).not.toBeInTheDocument();
+  });
+
+  it('shows an interrupted run\'s own failure reason, never only a bare status (FR-014)', async () => {
+    mockRunsById['stalled-run'] = makeRunDetail({
+      id: 'stalled-run',
+      status: 'incomplete',
+      failure_reason: 'This case did not complete after repeated recovery attempts.',
+    });
+    mockCasesByRunId['stalled-run'] = makeCasesEnvelope([]);
+
+    renderBreakdown('stalled-run');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('eval-run-breakdown-status')).toHaveTextContent('incomplete');
+    });
+    expect(screen.getByTestId('eval-run-breakdown-failure-reason')).toHaveTextContent(
+      'This case did not complete after repeated recovery attempts.',
+    );
+  });
+
+  it('renders no failure-reason line for a run that finished normally', async () => {
+    mockRunsById['run-1'] = makeRunDetail();
+    mockCasesByRunId['run-1'] = makeCasesEnvelope([
+      { id: 'result-1', eval_case_id: 'case-1', outcome: 'pass', outcome_override: null },
+    ]);
+
+    renderBreakdown('run-1');
+
+    await screen.findByTestId('eval-run-breakdown-case-row-result-1');
+    expect(screen.queryByTestId('eval-run-breakdown-failure-reason')).not.toBeInTheDocument();
   });
 
   it('navigates to the case detail route when a case row is selected', async () => {

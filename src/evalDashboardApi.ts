@@ -6,7 +6,7 @@ import type {
   CaseDetail,
   EvalCaseResultSummary,
   EvalRunDetail,
-  PaginatedEnvelope,
+  LaravelPaginated,
 } from './types';
 
 export const evalDashboardApi = createApi({
@@ -33,7 +33,7 @@ export const evalDashboardApi = createApi({
     // GET /eval-runs/{runId}/cases — the existing, unmodified paginated
     // per-case list (US2 breakdown body). `page` optional, matching
     // runApi.ts's own getRunSteps convention.
-    getRunCases: builder.query<PaginatedEnvelope<EvalCaseResultSummary>, { runId: string; page?: number }>({
+    getRunCases: builder.query<LaravelPaginated<EvalCaseResultSummary>, { runId: string; page?: number }>({
       query: ({ runId, page }) => `/eval-runs/${runId}/cases${page && page > 1 ? `?page=${page}` : ''}`,
       providesTags: (_result, _error, { runId }) => [{ type: 'EvalRunCases', id: runId }],
     }),
@@ -52,5 +52,6 @@ export const {
   useGetOverviewQuery,
   useGetRunDetailQuery,
   useGetRunCasesQuery,
+  useLazyGetRunCasesQuery,
   useGetCaseDetailQuery,
 } = evalDashboardApi;

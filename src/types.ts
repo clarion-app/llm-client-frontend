@@ -226,8 +226,11 @@ export interface AgentQualityOverview {
 }
 
 export interface JudgmentDetail {
-  score: number;
-  justification: string;
+  // score/justification are nullable at the source: a judgment that could
+  // not be produced (the unjudged outcome) records neither, and an
+  // override may correct one without supplying the other.
+  score: number | null;
+  justification: string | null;
   overridden: boolean;
   overridden_by: string | null;
   overridden_at: string | null;
@@ -302,6 +305,25 @@ export interface EvalRunDetail {
   overall: string;
   outcome_counts: EvalOutcomeCounts;
   consumption: EvalRunConsumption;
+}
+
+/**
+ * Laravel's own default paginator serialization, which is what
+ * `GET /eval-runs/{runId}/cases` returns: the eval-run controller hands a
+ * `LengthAwarePaginator` straight to `response()->json()`, so the page
+ * metadata sits at the top level of the body alongside `data` — it is not
+ * wrapped in the `meta` object `PaginatedEnvelope<T>` describes, which is
+ * the hand-built envelope the agent-run read endpoints assemble for
+ * themselves. Two genuinely different shapes from two different
+ * controllers; conflating them makes every page field silently
+ * `undefined` at runtime while both packages' own tests keep passing.
+ */
+export interface LaravelPaginated<T> {
+  data: T[];
+  current_page: number;
+  per_page: number;
+  total: number;
+  last_page: number;
 }
 
 export interface EvalCaseResultSummary {

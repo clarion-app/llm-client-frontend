@@ -1,8 +1,11 @@
 import React from 'react';
 
 /**
- * EvalDashboardEmptyState — shown when an agent has zero completed/
- * in_progress/incomplete runs (current_pass_rate === null). Mirrors
+ * EvalDashboardEmptyState — shown when an agent has produced no results at
+ * all: no completed run (current_pass_rate === null) *and* no trend bucket
+ * *and* no ranked failure, which together are only true of an agent whose
+ * suites have never been run. An agent with a run merely still in flight
+ * is not this case and keeps its real data on screen. Mirrors
  * EmptyState.tsx's own layout (icon, one-sentence explanation, one
  * concrete next step) with copy specific to this screen, so the operator
  * is never shown a misleading 0% pass rate for an agent that has never

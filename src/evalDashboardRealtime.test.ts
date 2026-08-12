@@ -37,7 +37,7 @@ vi.mock('./config', () => ({
 const registered: { event: string; handler: (event: any, dispatch: any) => void }[] = [];
 
 let runDetailSeed: EvalRunDetail | null = null;
-let runCasesSeed: { data: EvalCaseResultSummary[]; meta: any } | null = null;
+let runCasesSeed: { data: EvalCaseResultSummary[]; current_page: number; per_page: number; total: number; last_page: number } | null = null;
 let caseDetailSeed: unknown = null;
 
 let runDetailFetchCount = 0;
@@ -205,7 +205,10 @@ describe('evalDashboardRealtime — EvalRunCaseResultRecorded handler (run-cases
   beforeEach(() => {
     runCasesSeed = {
       data: [makeCaseResultSummary()],
-      meta: { current_page: 1, per_page: 25, total: 1, last_page: 1 },
+      current_page: 1,
+      per_page: 25,
+      total: 1,
+      last_page: 1,
     };
     runCasesFetchCount = 0;
   });

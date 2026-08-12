@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useGetRunCasesQuery, useGetRunDetailQuery } from './evalDashboardApi';
+import { useGetRunCasesQuery, useGetRunDetailQuery, useLazyGetRunCasesQuery } from './evalDashboardApi';
 import { EvalOutcomeBadge } from './EvalOutcomeBadge';
-import type { EvalRunConsumption } from './types';
+import type { EvalCaseResultSummary, EvalRunConsumption } from './types';
 
 interface EvalRunBreakdownProps {
   runId?: string;
@@ -88,6 +88,32 @@ export function EvalRunBreakdown({ runId: runIdProp }: EvalRunBreakdownProps = {
   const runDetail = useGetRunDetailQuery(runId, { skip: runId === '' });
   const runCases = useGetRunCasesQuery({ runId }, { skip: runId === '' });
 
+  // The cases list is paginated server-side (25 per page by default) and a
+  // suite may hold hundreds of cases, so fetching only page 1 would leave
+  // every case past the first page permanently unreachable in the UI while
+  // the backend held it all along. Page 1 stays its own ordinary query
+  // (the entry the realtime handler patches in place); later pages are
+  // appended to local state on demand.
+  const [fetchCasesPage] = useLazyGetRunCasesQuery();
+  const [extraCases, setExtraCases] = useState<EvalCaseResultSummary[]>([]);
+  const [pagesLoaded, setPagesLoaded] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const loadMoreCases = () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+    fetchCasesPage({ runId, page: pagesLoaded + 1 })
+      .unwrap()
+      .then((page) => {
+        setExtraCases((previous) => [...previous, ...page.data]);
+        setPagesLoaded((loaded) => loaded + 1);
+        setIsLoadingMore(false);
+      })
+      .catch(() => {
+        setIsLoadingMore(false);
+      });
+  };
+
   if (runId === '') {
     return <div data-testid="eval-run-breakdown-not-available">No run was specified.</div>;
   }
@@ -109,12 +135,18 @@ export function EvalRunBreakdown({ runId: runIdProp }: EvalRunBreakdownProps = {
   }
 
   const run = runDetail.data;
-  const cases = runCases.data.data;
+  const pageOneCases = runCases.data.data;
+  const cases = extraCases.length === 0 ? pageOneCases : [...pageOneCases, ...extraCases];
+  const total = runCases.data.total ?? cases.length;
+  const hasMoreCases = cases.length < total;
 
   return (
     <div data-testid="eval-run-breakdown">
       <h1>{run.agent_label}</h1>
       <div data-testid="eval-run-breakdown-status">{run.status}</div>
+      {run.failure_reason && (
+        <div data-testid="eval-run-breakdown-failure-reason">{run.failure_reason}</div>
+      )}
       <div data-testid="eval-run-breakdown-outcome-counts" style={{ display: 'flex', gap: '0.75rem' }}>
         {Object.entries(run.outcome_counts).map(([outcome, count]) => (
           <span key={outcome}>
@@ -137,6 +169,16 @@ export function EvalRunBreakdown({ runId: runIdProp }: EvalRunBreakdownProps = {
             <EvalOutcomeBadge outcome={caseResult.outcome_override ?? caseResult.outcome} />
           </div>
         ))}
+        {hasMoreCases && (
+          <button
+            type="button"
+            data-testid="eval-run-breakdown-load-more-cases"
+            onClick={loadMoreCases}
+            disabled={isLoadingMore}
+          >
+            {isLoadingMore ? 'Loading…' : `Load more cases (${cases.length} of ${total})`}
+          </button>
+        )}
       </div>
     </div>
   );

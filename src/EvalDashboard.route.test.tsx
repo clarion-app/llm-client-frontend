@@ -5,7 +5,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { evalDashboardApi } from './evalDashboardApi';
-import type { AgentQualityOverview, CaseDetail, EvalCaseResultSummary, EvalRunDetail, PaginatedEnvelope } from './types';
+import type { AgentQualityOverview, CaseDetail, EvalCaseResultSummary, EvalRunDetail, LaravelPaginated } from './types';
 
 /**
  * Mirrors RunDiagram.route.test.tsx exactly (research.md D9): renders the
@@ -21,7 +21,7 @@ import type { AgentQualityOverview, CaseDetail, EvalCaseResultSummary, EvalRunDe
 
 let mockOverviewsByAgent: Record<string, AgentQualityOverview> = {};
 let mockRunsById: Record<string, EvalRunDetail> = {};
-let mockCasesByRunId: Record<string, PaginatedEnvelope<EvalCaseResultSummary>> = {};
+let mockCasesByRunId: Record<string, LaravelPaginated<EvalCaseResultSummary>> = {};
 let mockCaseDetailsByKey: Record<string, CaseDetail> = {};
 
 vi.mock('./config', () => ({
@@ -191,7 +191,10 @@ describe('eval-dashboard routes, rendered exactly as the manifest declares them'
     mockRunsById['route-run-from-url'] = makeRunDetail({ id: 'route-run-from-url' });
     mockCasesByRunId['route-run-from-url'] = {
       data: [{ id: 'result-1', eval_case_id: 'case-1', outcome: 'pass', outcome_override: null }],
-      meta: { current_page: 1, per_page: 25, total: 1, last_page: 1 },
+      current_page: 1,
+      per_page: 25,
+      total: 1,
+      last_page: 1,
     };
 
     renderManifestRoutes('/clarion-app/llm-client/eval-runs/route-run-from-url');
@@ -235,7 +238,10 @@ describe('eval-dashboard routes, rendered exactly as the manifest declares them'
     mockRunsById['drill-run-1'] = makeRunDetail({ id: 'drill-run-1', agent_label: 'drill-agent' });
     mockCasesByRunId['drill-run-1'] = {
       data: [{ id: 'drill-result-1', eval_case_id: 'drill-case-1', outcome: 'pass', outcome_override: null }],
-      meta: { current_page: 1, per_page: 25, total: 1, last_page: 1 },
+      current_page: 1,
+      per_page: 25,
+      total: 1,
+      last_page: 1,
     };
     mockCaseDetailsByKey['drill-run-1:drill-result-1'] = makeCaseDetail({
       id: 'drill-result-1',

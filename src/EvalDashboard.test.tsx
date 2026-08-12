@@ -153,7 +153,7 @@ describe('EvalDashboard', () => {
     });
   });
 
-  it('renders EvalDashboardEmptyState instead of the trend/failures sections when current_pass_rate is null', async () => {
+  it('renders EvalDashboardEmptyState instead of the trend/failures sections for an agent with nothing recorded at all', async () => {
     mockOverviewsByAgent['empty-agent'] = makeOverview({
       current_pass_rate: null,
       trend: { window_days: 30, buckets: [] },
@@ -167,6 +167,29 @@ describe('EvalDashboard', () => {
     });
     expect(screen.queryByTestId('eval-trend-chart')).not.toBeInTheDocument();
     expect(screen.queryByTestId('eval-persistent-failures-list')).not.toBeInTheDocument();
+  });
+
+  it('keeps showing recorded trend/failure data for an agent whose runs have not finished yet, never the "no results" explanation over real results', async () => {
+    // No run has reached `completed`, so the overview carries no current
+    // pass rate — but cases have already been recorded, so there is real
+    // history to show. "Nothing has finished" is not "nothing exists."
+    mockOverviewsByAgent['in-flight-agent'] = makeOverview({
+      agent_label: 'in-flight-agent',
+      current_pass_rate: null,
+    });
+
+    renderDashboard('in-flight-agent');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('eval-trend-chart')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('eval-persistent-failures-list')).toBeInTheDocument();
+    expect(screen.queryByTestId('eval-dashboard-empty-state')).not.toBeInTheDocument();
+
+    // And the missing pass rate is reported as missing, never as a 0%.
+    expect(screen.getByTestId('eval-dashboard-pass-rate-pending')).toBeInTheDocument();
+    expect(screen.queryByTestId('eval-dashboard-pass-rate')).not.toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
   });
 
   it('renders a generic access-denied state on a 403 response, never a partial dashboard', async () => {
