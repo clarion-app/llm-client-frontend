@@ -177,12 +177,43 @@ export interface PaginatedEnvelope<T> {
 
 // Agent search/browse types (094-agent-search-listing, data-model.md §5)
 
+// Agent summary card usage types (095-agent-summary-cards, contracts/
+// frontend-agent-cards.md §2, data-model.md §6/§8)
+
+export interface AgentReliabilitySummary {
+  invocation_count: number;
+  success_count: number;
+  failure_count: number;
+  low_sample: boolean;
+  no_activity: boolean;
+}
+
+export interface AgentCostSummary {
+  priced_cost_total: string;
+  request_count: number;
+  unpriced_request_count: number;
+  has_estimated_cost: boolean;
+}
+
+export interface AgentUsageSummary {
+  has_run: boolean;
+  run_count: number;
+  reliability: AgentReliabilitySummary;
+  cost: AgentCostSummary;
+}
+
 export interface AgentSearchEntry {
   id: string;
   name: string;
   is_active: boolean;
   can_use: boolean;
   current_version_number: number | null;
+  // New (095-agent-summary-cards, data-model.md §8):
+  purpose: string;
+  capabilities: string[];
+  operation_count: number;
+  memory_enabled: boolean;
+  usage: AgentUsageSummary;
 }
 
 export type AgentSearchEnvelope = PaginatedEnvelope<AgentSearchEntry> & { total_unfiltered: number };

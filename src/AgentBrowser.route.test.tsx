@@ -84,6 +84,13 @@ function renderManifestRoute(initialEntry: string) {
   );
 }
 
+/**
+ * 095-agent-summary-cards, tasks.md T014 (contracts/frontend-agent-cards.md
+ * §4): extended with the five new AgentSearchEntry fields the enlarged
+ * `GET /agents/search` response now carries — `usage` defaults to a
+ * `has_run: false` shape so this fixture, used unmodified, exercises the
+ * "Not yet used" branch through the real manifest route below.
+ */
 function makeAgent(overrides: Partial<AgentSearchEntry> = {}): AgentSearchEntry {
   return {
     id: 'agent-1',
@@ -91,6 +98,27 @@ function makeAgent(overrides: Partial<AgentSearchEntry> = {}): AgentSearchEntry 
     is_active: true,
     can_use: true,
     current_version_number: 1,
+    purpose: 'Helps customers troubleshoot billing issues.',
+    capabilities: ['memory_read'],
+    operation_count: 5,
+    memory_enabled: true,
+    usage: {
+      has_run: false,
+      run_count: 0,
+      reliability: {
+        invocation_count: 0,
+        success_count: 0,
+        failure_count: 0,
+        low_sample: false,
+        no_activity: true,
+      },
+      cost: {
+        priced_cost_total: '0.00',
+        request_count: 0,
+        unpriced_request_count: 0,
+        has_estimated_cost: false,
+      },
+    },
     ...overrides,
   };
 }
@@ -126,5 +154,12 @@ describe('AgentBrowser via its declared route', () => {
 
     expect(screen.getByTestId('agent-row-agent-from-route').textContent ?? '').toMatch(/Routed Agent/);
     expect(screen.queryByTestId('agent-browser-empty-account')).not.toBeInTheDocument();
+
+    // 095-agent-summary-cards, tasks.md T014 (contracts/frontend-agent-
+    // cards.md §4): the enlarged response shape's `usage.has_run: false`
+    // (this fixture's default) must reach the DOM through the real
+    // manifest-declared route (AgentBrowser.tsx -> AgentCard), not just
+    // through AgentCard.test.tsx's own direct-render tier.
+    expect(screen.getByTestId('agent-row-agent-from-route').textContent ?? '').toMatch(/not yet used/i);
   });
 });

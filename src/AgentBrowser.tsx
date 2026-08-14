@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchAgentsQuery } from './agentBrowserApi';
+import { AgentCard } from './AgentCard';
 import type { AgentSearchEnvelope } from './types';
 
 /**
@@ -94,21 +95,7 @@ export function AgentBrowser(): React.ReactElement {
       ) : (
         <div>
           {agents.map((agent) => (
-            <div
-              key={agent.id}
-              data-testid={`agent-row-${agent.id}`}
-              className="border-b border-gray-200 py-2"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-700">{agent.name}</span>
-                <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium">
-                  {agent.is_active ? 'In-service' : 'Retired'}
-                </span>
-                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
-                  {agent.can_use ? 'Usable' : 'View only'}
-                </span>
-              </div>
-            </div>
+            <AgentCard key={agent.id} agent={agent} />
           ))}
         </div>
       )}
