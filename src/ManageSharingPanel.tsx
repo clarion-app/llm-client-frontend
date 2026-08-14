@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { useListSharesQuery, useListInstallationUsersQuery, useCreateShareMutation } from './agentShareApi';
+import {
+  useListSharesQuery,
+  useListInstallationUsersQuery,
+  useCreateShareMutation,
+  useRevokeShareMutation,
+} from './agentShareApi';
 import type { AgentSharePermission } from './types';
 
 /**
@@ -21,6 +26,13 @@ import type { AgentSharePermission } from './types';
  * concurrently deleted) and a createShare 422 (self-share, unknown
  * recipient, invalid permission) are rendered inline as distinct error
  * states rather than thrown/crashed through.
+ *
+ * Each listed grant also carries a "Revoke" button
+ * (data-testid={`agent-share-revoke-${recipient_user_id}`}) calling
+ * useRevokeShareMutation with { agentId, recipientUserId }; a successful
+ * revoke relies on that mutation's own invalidatesTags: ['AgentShares'] to
+ * make useListSharesQuery refetch, so no local state is needed here beyond
+ * the shared list itself.
  */
 
 interface ManageSharingPanelProps {
@@ -60,6 +72,7 @@ export function ManageSharingPanel({ agentId }: ManageSharingPanelProps): React.
   const { data: sharesData, isError: sharesIsError } = useListSharesQuery({ agentId });
   const { data: installationUsers } = useListInstallationUsersQuery();
   const [createShare, { isLoading: isCreating }] = useCreateShareMutation();
+  const [revokeShare] = useRevokeShareMutation();
 
   const users = installationUsers ?? [];
   const effectiveRecipientUserId = recipientUserId || users[0]?.id || '';
@@ -80,6 +93,17 @@ export function ManageSharingPanel({ agentId }: ManageSharingPanelProps): React.
     }
   };
 
+  const handleRevoke = async (recipientUserId: string) => {
+    try {
+      await revokeShare({ agentId, recipientUserId }).unwrap();
+    } catch {
+      // Revocation failures aren't specced with a dedicated inline state
+      // (unlike the grant form's 422/404 cases) — the list simply stays as
+      // it was, which is already a correct reflection of the still-active
+      // grant.
+    }
+  };
+
   return (
     <div data-testid="manage-sharing-panel">
       <button type="button" data-testid="manage-sharing-toggle" onClick={() => setExpanded((prev) => !prev)}>
@@ -97,7 +121,14 @@ export function ManageSharingPanel({ agentId }: ManageSharingPanelProps): React.
               <ul>
                 {(sharesData?.data ?? []).map((share) => (
                   <li key={share.id} data-testid={`agent-share-row-${share.recipient_user_id}`}>
-                    {share.recipient_name} — {permissionLabel(share.permission)}
+                    {share.recipient_name} — {permissionLabel(share.permission)}{' '}
+                    <button
+                      type="button"
+                      data-testid={`agent-share-revoke-${share.recipient_user_id}`}
+                      onClick={() => handleRevoke(share.recipient_user_id)}
+                    >
+                      Revoke
+                    </button>
                   </li>
                 ))}
               </ul>

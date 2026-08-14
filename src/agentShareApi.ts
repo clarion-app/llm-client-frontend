@@ -6,10 +6,9 @@ import type { AgentShare, AgentSharePermission, InstallationUser } from './types
 /**
  * Agent-sharing grants (096-agent-sharing, contracts/
  * frontend-agent-sharing.md §2). `listShares`/`createShare` cover the two
- * new backend endpoints this phase (US1) adds — `GET`/`POST
- * agents/{id}/shares`. `revokeShare` (`DELETE
- * agents/{id}/shares/{recipientUserId}`) is Phase 5/US3's own addition to
- * this same file, not here.
+ * backend endpoints US1 (Phase 3) adds — `GET`/`POST agents/{id}/shares`.
+ * `revokeShare` (`DELETE agents/{id}/shares/{recipientUserId}`) is Phase
+ * 5/US3's own addition to this same file.
  *
  * `listInstallationUsers` reuses the host app's own already-shipped,
  * already-authenticated `GET api/clarion/system/user` endpoint
@@ -45,10 +44,22 @@ export const agentShareApi = createApi({
       }),
       invalidatesTags: ['AgentShares'],
     }),
+    revokeShare: builder.mutation<void, { agentId: string; recipientUserId: string }>({
+      query: ({ agentId, recipientUserId }) => ({
+        url: `/agents/${agentId}/shares/${recipientUserId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['AgentShares'],
+    }),
     listInstallationUsers: builder.query<InstallationUser[], void>({
       query: () => `${backend.url}/api/clarion/system/user`,
     }),
   }),
 });
 
-export const { useListSharesQuery, useCreateShareMutation, useListInstallationUsersQuery } = agentShareApi;
+export const {
+  useListSharesQuery,
+  useCreateShareMutation,
+  useRevokeShareMutation,
+  useListInstallationUsersQuery,
+} = agentShareApi;
