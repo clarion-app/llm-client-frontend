@@ -119,6 +119,12 @@ function makeAgent(overrides: Partial<AgentSearchEntry> = {}): AgentSearchEntry 
         has_estimated_cost: false,
       },
     },
+    // 096-agent-sharing, data-model.md §10 — is_shared/shared_by/permission
+    // default to an unshared, self-owned agent so this fixture, used
+    // unmodified, keeps exercising every pre-existing test's assumptions.
+    is_shared: false,
+    shared_by: null,
+    permission: 'use',
     ...overrides,
   };
 }
@@ -213,5 +219,34 @@ describe('AgentBrowser via its declared route', () => {
     expect(rowText).toMatch(/memory_search/);
     expect(rowText).not.toMatch(/not yet used/i);
     expect(rowText).toMatch(/Ran 4 times/);
+  });
+
+  // 096-agent-sharing (T024, US1), contracts/frontend-agent-sharing.md §5 —
+  // the "Shared by" marking must reach the DOM through the real
+  // manifest-declared route, not just AgentCard.test.tsx's own
+  // direct-render tier (mirrors 095's own §4 guard, above).
+  it('renders "Shared by {name}" through the real manifest-declared route when a search result is shared', async () => {
+    const agent = makeAgent({
+      id: 'agent-shared-via-route',
+      name: 'Shared Route Agent',
+      is_shared: true,
+      shared_by: { id: 'owner-9', name: 'Alex Rivera' },
+      permission: 'use',
+    });
+    mockSearchResponse = {
+      data: [agent],
+      meta: { current_page: 1, per_page: 20, total: 1, last_page: 1 },
+      total_unfiltered: 1,
+    };
+
+    renderManifestRoute('/clarion-app/llm-client/agents');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-row-agent-shared-via-route')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('agent-row-agent-shared-via-route').textContent ?? '').toMatch(
+      /Shared by Alex Rivera/,
+    );
   });
 });

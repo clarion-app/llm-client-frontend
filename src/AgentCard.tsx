@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AgentSearchEntry, AgentUsageSummary } from './types';
+import { ManageSharingPanel } from './ManageSharingPanel';
 
 /**
  * AgentCard — the per-agent presentational summary card (095-agent-summary-
@@ -75,7 +76,17 @@ export function AgentCard({ agent }: { agent: AgentSearchEntry }): React.ReactEl
         <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
           {agent.can_use ? 'Usable' : 'View only'}
         </span>
+        {agent.is_shared && agent.shared_by && (
+          <span
+            data-testid="agent-card-shared-by"
+            className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800"
+          >
+            Shared by {agent.shared_by.name}
+          </span>
+        )}
       </div>
+
+      {agent.permission === 'owner' && <ManageSharingPanel agentId={agent.id} />}
 
       {agent.purpose ? (
         <div

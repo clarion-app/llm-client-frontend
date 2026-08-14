@@ -205,6 +205,20 @@ describe('manifest — customFields.clarion.api (FR-003a)', () => {
     expect(apiList).toContain('llmClientServerStatusApi');
   });
 
+  /**
+   * 096-agent-sharing, contracts/frontend-agent-sharing.md §1 — the one
+   * `package.json` entry this feature's new `agentShareApi.ts` slice
+   * cannot skip, per 070-run-execution-graph's own reconciliation lesson
+   * (`llmClientRunApi` shipped exported but unlisted here, so its
+   * reducer/middleware were never registered in the host's generated
+   * store despite every package-scoped test passing). Confirmed red here
+   * against the current `package.json`, which does not yet list it, before
+   * the entry is added.
+   */
+  it('contains llmClientAgentShareApi', () => {
+    expect(apiList).toContain('llmClientAgentShareApi');
+  });
+
   it('does not contain llmClientUserSettingApi', () => {
     expect(apiList).not.toContain('llmClientUserSettingApi');
   });

@@ -1,7 +1,23 @@
 import React from 'react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AgentCard } from './AgentCard';
+
+/**
+ * 096-agent-sharing, contracts/frontend-agent-sharing.md §4 — `AgentCard.tsx`
+ * does not read `is_shared`/`shared_by`/`permission` yet (that extension is
+ * a later implementation task, out of scope here), so `./ManageSharingPanel`
+ * is not actually imported by production code today either. It is mocked
+ * below anyway, per this package's own established convention for a
+ * not-yet-existing sibling component (ModelSetup.test.tsx's `./EmptyState`/
+ * `./RolesPanel` mocks, RoleCard.test.tsx's `./ModelPicker` mock), so that
+ * once `AgentCard.tsx` is extended to render `<ManageSharingPanel />` this
+ * file keeps testing `AgentCard`'s own orchestration rather than
+ * `ManageSharingPanel`'s internals.
+ */
+vi.mock('./ManageSharingPanel', () => ({
+  ManageSharingPanel: () => React.createElement('div', { 'data-testid': 'manage-sharing-panel-mock' }, 'Mock Manage Sharing Panel'),
+}));
 
 /**
  * Phase 3 (US1 + US2, 095-agent-summary-cards), contracts/
@@ -359,5 +375,76 @@ describe('AgentCard — US2: whether an agent is working well, at a glance', () 
 
     expect(screen.getByTestId('agent-card-usage-status').textContent ?? '').not.toMatch(/not yet used/i);
     expect(screen.getByTestId('agent-card-run-count').textContent ?? '').toMatch(/0/);
+  });
+});
+
+// =====================================================================
+// T021 (096-agent-sharing, US1), contracts/frontend-agent-sharing.md §4 —
+// the "Shared by {name}" marking and the owner-only ManageSharingPanel slot
+// this feature adds to AgentCard. Neither is implemented yet: the two
+// positive-case tests below are expected to fail against the current
+// component (no such element/child is ever rendered today); the two
+// negative-case tests happen to already hold trivially (the component
+// renders neither element for any fixture today) and are kept for symmetry
+// with the eventual implementation's own four-way branch.
+// =====================================================================
+
+interface AgentShareOwnerFixture {
+  id: string;
+  name: string;
+}
+
+type AgentSharingFixtureFields = {
+  is_shared: boolean;
+  shared_by: AgentShareOwnerFixture | null;
+  permission: 'owner' | 'use' | 'use_and_edit';
+};
+
+function makeSharedAgent(
+  overrides: Partial<AgentCardFixture & AgentSharingFixtureFields> = {},
+) {
+  return {
+    ...makeAgent(),
+    is_shared: false,
+    shared_by: null,
+    permission: 'use' as const,
+    ...overrides,
+  };
+}
+
+describe('AgentCard — 096-agent-sharing US1: "Shared by" marking and owner-only sharing panel', () => {
+  it('renders "Shared by {name}" when is_shared is true and shared_by names the owner', () => {
+    const agent = makeSharedAgent({
+      is_shared: true,
+      shared_by: { id: 'owner-1', name: 'Alex Rivera' },
+    });
+
+    render(<AgentCard agent={agent as any} />);
+
+    expect(screen.getByTestId('agent-card-shared-by').textContent ?? '').toMatch(/Shared by Alex Rivera/);
+  });
+
+  it('renders no "Shared by" element when is_shared is false', () => {
+    const agent = makeSharedAgent({ is_shared: false, shared_by: null });
+
+    render(<AgentCard agent={agent as any} />);
+
+    expect(screen.queryByTestId('agent-card-shared-by')).not.toBeInTheDocument();
+  });
+
+  it('renders ManageSharingPanel when permission is owner', () => {
+    const agent = makeSharedAgent({ permission: 'owner' });
+
+    render(<AgentCard agent={agent as any} />);
+
+    expect(screen.getByTestId('manage-sharing-panel-mock')).toBeInTheDocument();
+  });
+
+  it.each(['use', 'use_and_edit'] as const)('renders no ManageSharingPanel when permission is %s', (permission) => {
+    const agent = makeSharedAgent({ permission });
+
+    render(<AgentCard agent={agent as any} />);
+
+    expect(screen.queryByTestId('manage-sharing-panel-mock')).not.toBeInTheDocument();
   });
 });
