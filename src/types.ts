@@ -175,6 +175,18 @@ export interface PaginatedEnvelope<T> {
   };
 }
 
+// Agent search/browse types (094-agent-search-listing, data-model.md §5)
+
+export interface AgentSearchEntry {
+  id: string;
+  name: string;
+  is_active: boolean;
+  can_use: boolean;
+  current_version_number: number | null;
+}
+
+export type AgentSearchEnvelope = PaginatedEnvelope<AgentSearchEntry> & { total_unfiltered: number };
+
 // Eval dashboard types (contracts/eval-dashboard-api.md §1-§2)
 
 export type EvalCaseOutcome = 'pass' | 'fail' | 'needs_human_review' | 'errored' | 'unjudged';

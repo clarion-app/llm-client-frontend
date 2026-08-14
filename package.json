@@ -51,7 +51,8 @@
                 "llmClientRoleAssignmentApi",
                 "llmClientServerStatusApi",
                 "llmClientRunApi",
-                "llmClientEvalDashboardApi"
+                "llmClientEvalDashboardApi",
+                "llmClientAgentBrowserApi"
             ],
             "routes": [
                 {
@@ -101,6 +102,10 @@
                 {
                     "path": "/clarion-app/llm-client/eval-runs/:runId/cases/:caseResultId",
                     "element": "<EvalCaseDetail />"
+                },
+                {
+                    "path": "/clarion-app/llm-client/agents",
+                    "element": "<AgentBrowser />"
                 }
             ],
             "menu": {
@@ -117,6 +122,10 @@
                     {
                         "name": "Runs",
                         "path": "/clarion-app/llm-client/runs"
+                    },
+                    {
+                        "name": "Agents",
+                        "path": "/clarion-app/llm-client/agents"
                     }
                 ],
                 "pinnedEntries": [
