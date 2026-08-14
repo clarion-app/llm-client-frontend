@@ -247,6 +247,32 @@ export interface AgentSearchEntry {
 
 export type AgentSearchEnvelope = PaginatedEnvelope<AgentSearchEntry> & { total_unfiltered: number };
 
+// Sub-Agent Model types (data-model.md §8, 097-subagent-model)
+export type HelperStatus = 'active' | 'deactivated' | 'gone';
+
+export interface AgentHelper {
+  id: string; // AgentHelperAssignment id
+  parent_agent_id: string;
+  helper_agent_id: string;
+  helper_name: string;
+  helper_purpose: string | null;
+  helper_status: HelperStatus;
+  within_bounds: boolean;
+  effective_operation_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentHelperHierarchyEntry {
+  agent_id: string;
+  name: string;
+  depth: number;
+  path: string[];
+  helper_status: HelperStatus;
+  within_bounds: boolean;
+  effective_operation_count: number;
+}
+
 // Eval dashboard types (contracts/eval-dashboard-api.md §1-§2)
 
 export type EvalCaseOutcome = 'pass' | 'fail' | 'needs_human_review' | 'errored' | 'unjudged';
