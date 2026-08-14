@@ -162,4 +162,56 @@ describe('AgentBrowser via its declared route', () => {
     // through AgentCard.test.tsx's own direct-render tier.
     expect(screen.getByTestId('agent-row-agent-from-route').textContent ?? '').toMatch(/not yet used/i);
   });
+
+  it('threads the enlarged response fields through to AgentCard, not just AgentCard\'s own defensive defaults (mutation-checklist row 9 closing gap)', async () => {
+    // The prior "renders real seeded agent rows..." case's makeAgent()
+    // default fixture is has_run: false with every other usage figure at
+    // zero -- identical to AgentCard.tsx's own DEFAULT_USAGE fallback, so
+    // that test alone cannot distinguish "AgentBrowser genuinely passed
+    // usage through" from "AgentBrowser dropped it and AgentCard silently
+    // defaulted." This fixture uses values AgentCard has no default for
+    // (has_run: true, a specific run_count, a specific purpose/capability)
+    // so a dropped field renders visibly differently, not accidentally
+    // the same.
+    const agent = makeAgent({
+      id: 'agent-with-real-activity',
+      name: 'Active Agent',
+      purpose: 'Distinctive purpose text unique to this fixture.',
+      capabilities: ['memory_search'],
+      usage: {
+        has_run: true,
+        run_count: 4,
+        reliability: {
+          invocation_count: 4,
+          success_count: 4,
+          failure_count: 0,
+          low_sample: true,
+          no_activity: false,
+        },
+        cost: {
+          priced_cost_total: '2.50',
+          request_count: 4,
+          unpriced_request_count: 0,
+          has_estimated_cost: false,
+        },
+      },
+    });
+    mockSearchResponse = {
+      data: [agent],
+      meta: { current_page: 1, per_page: 20, total: 1, last_page: 1 },
+      total_unfiltered: 1,
+    };
+
+    renderManifestRoute('/clarion-app/llm-client/agents');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-row-agent-with-real-activity')).toBeInTheDocument();
+    });
+
+    const rowText = screen.getByTestId('agent-row-agent-with-real-activity').textContent ?? '';
+    expect(rowText).toMatch(/Distinctive purpose text unique to this fixture\./);
+    expect(rowText).toMatch(/memory_search/);
+    expect(rowText).not.toMatch(/not yet used/i);
+    expect(rowText).toMatch(/Ran 4 times/);
+  });
 });
