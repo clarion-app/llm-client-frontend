@@ -238,6 +238,20 @@ describe('manifest — customFields.clarion.api (FR-003a)', () => {
   });
 
   /**
+   * 098-delegation-protocol, contracts/delegation-protocol-api.md §4 — the
+   * one `package.json` entry this feature's new `delegationApi.ts` slice
+   * cannot skip, per 070-run-execution-graph's own reconciliation lesson
+   * (`llmClientRunApi` shipped exported but unlisted here, so its
+   * reducer/middleware were never registered in the host's generated
+   * store despite every package-scoped test passing). Confirmed red here
+   * against the current `package.json`, which does not yet list it, before
+   * the entry is added (tasks.md T032).
+   */
+  it('contains llmClientDelegationApi', () => {
+    expect(apiList).toContain('llmClientDelegationApi');
+  });
+
+  /**
    * Every RTK Query slice this package exports must also be declared here.
    * The host app generates its store — reducers, middleware, and
    * `resetApiState` wiring — solely from this list
