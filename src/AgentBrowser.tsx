@@ -11,9 +11,12 @@ import type { AgentSearchEnvelope } from './types';
  * customFields.clarion.routes exactly like every other manifest-routed
  * screen.
  *
- * `page` is local state, initialized to 1 and not yet exposed via any
- * navigation control — Phase 4/US3's own addition (tasks.md's Ordering
- * grounding note).
+ * `page` is local state, initialized to 1 and exposed via the Prev/Next
+ * controls below (`agent-browser-prev-page` / `agent-browser-next-page`,
+ * Phase 4/US3, tasks.md T025) — disabled at the bounds using
+ * `meta.current_page`/`meta.last_page` from the response, and reset back to
+ * 1 whenever the search text changes so a narrowed search never opens on a
+ * now-out-of-range page.
  *
  * `lastData` retains the most recently successful response across a
  * search-text-driven arg change (a distinct RTK Query cache entry, whose
@@ -25,9 +28,14 @@ import type { AgentSearchEnvelope } from './types';
  */
 export function AgentBrowser(): React.ReactElement {
   const [searchText, setSearchText] = useState('');
-  const [page] = useState(1);
+  const [page, setPage] = useState(1);
 
   const { data, isLoading, isError } = useSearchAgentsQuery({ q: searchText || undefined, page });
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchText(e.target.value);
+    setPage(1);
+  };
 
   const [lastData, setLastData] = useState<AgentSearchEnvelope | undefined>(undefined);
 
@@ -65,7 +73,8 @@ export function AgentBrowser(): React.ReactElement {
   }
 
   const agents = effectiveData.data;
-  const total = effectiveData.meta.total;
+  const meta = effectiveData.meta;
+  const total = meta.total;
 
   return (
     <div data-testid="agent-browser">
@@ -73,7 +82,7 @@ export function AgentBrowser(): React.ReactElement {
         data-testid="agent-browser-search-input"
         type="text"
         value={searchText}
-        onChange={(e) => setSearchText(e.target.value)}
+        onChange={handleSearchChange}
         placeholder="Search agents by name or instructions..."
         className="border border-gray-300 rounded px-2 py-1 text-sm w-full mb-3"
       />
@@ -103,6 +112,27 @@ export function AgentBrowser(): React.ReactElement {
           ))}
         </div>
       )}
+
+      <div className="flex items-center justify-between mt-3">
+        <button
+          type="button"
+          data-testid="agent-browser-prev-page"
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          disabled={meta.current_page <= 1}
+          className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-50"
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          data-testid="agent-browser-next-page"
+          onClick={() => setPage((p) => p + 1)}
+          disabled={meta.current_page >= meta.last_page}
+          className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }
