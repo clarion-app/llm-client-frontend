@@ -20,6 +20,20 @@ vi.mock('./ManageSharingPanel', () => ({
 }));
 
 /**
+ * 097-subagent-model, contracts/frontend-subagent-model.md §4 — `AgentCard.tsx`
+ * does not render `ManageHelpersPanel` yet (that extension is a later
+ * implementation task, T033, out of scope here), so `./ManageHelpersPanel`
+ * is not actually imported by production code today either. Mocked below
+ * for the identical reason `./ManageSharingPanel` is mocked above — this
+ * file keeps testing `AgentCard`'s own orchestration rather than
+ * `ManageHelpersPanel`'s internals, once `AgentCard.tsx` is extended to
+ * render it.
+ */
+vi.mock('./ManageHelpersPanel', () => ({
+  ManageHelpersPanel: () => React.createElement('div', { 'data-testid': 'manage-helpers-panel-mock' }, 'Mock Manage Helpers Panel'),
+}));
+
+/**
  * Phase 3 (US1 + US2, 095-agent-summary-cards), contracts/
  * frontend-agent-cards.md §3-§4, data-model.md §8 — the new presentational
  * `AgentCard` component this feature adds, replacing `AgentBrowser.tsx`'s
@@ -446,5 +460,29 @@ describe('AgentCard — 096-agent-sharing US1: "Shared by" marking and owner-onl
     render(<AgentCard agent={agent as any} />);
 
     expect(screen.queryByTestId('manage-sharing-panel-mock')).not.toBeInTheDocument();
+  });
+});
+
+// =====================================================================
+// T020 (097-subagent-model), contracts/frontend-subagent-model.md §4 — the
+// owner-only ManageHelpersPanel slot this feature adds to AgentCard,
+// mirroring the ManageSharingPanel gate test above exactly.
+// =====================================================================
+
+describe('AgentCard — 097-subagent-model US1: owner-only helpers panel', () => {
+  it('renders ManageHelpersPanel when permission is owner', () => {
+    const agent = makeSharedAgent({ permission: 'owner' });
+
+    render(<AgentCard agent={agent as any} />);
+
+    expect(screen.getByTestId('manage-helpers-panel-mock')).toBeInTheDocument();
+  });
+
+  it.each(['use', 'use_and_edit'] as const)('renders no ManageHelpersPanel when permission is %s', (permission) => {
+    const agent = makeSharedAgent({ permission });
+
+    render(<AgentCard agent={agent as any} />);
+
+    expect(screen.queryByTestId('manage-helpers-panel-mock')).not.toBeInTheDocument();
   });
 });
