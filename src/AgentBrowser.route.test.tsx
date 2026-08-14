@@ -95,6 +95,12 @@ function makeAgent(overrides: Partial<AgentSearchEntry> = {}): AgentSearchEntry 
   };
 }
 
+describe('AgentBrowser — zero-required-props contract (mutation-checklist row 9)', () => {
+  it('accepts zero required arguments (function arity 0), matching contracts §2 — a required prop with no default would raise this to 1, invisible to every other check in this pipeline since vitest does not type-check and tsc excludes *.test.* files from the build', () => {
+    expect(AgentBrowser.length).toBe(0);
+  });
+});
+
 describe('AgentBrowser via its declared route', () => {
   beforeEach(() => {
     mockSearchResponse = {
