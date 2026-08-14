@@ -1,19 +1,16 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { createBaseQuery } from '@clarion-app/frontend-base';
 import { backend } from './config';
-import type { AgentHelper } from './types';
+import type { AgentHelper, AgentHelperHierarchyEntry } from './types';
 
 /**
  * Sub-agent helper assignments (097-subagent-model, contracts/
  * frontend-subagent-model.md §2). `listHelpers`/`assignHelper` cover the two
  * backend endpoints US1+US2 (Phase 3) add — `GET`/`POST agents/{id}/helpers`.
  * `listHelperHierarchy` (`GET agents/{id}/helpers/hierarchy`, Phase 4/US3)
- * and `removeHelper` (`DELETE agents/{id}/helpers/{helperAgentId}`, Phase
- * 5/US4) are later additions to this same file, once their backend endpoints
- * land — not added yet.
- *
- * Both tag types are declared now, even though `AgentHelperHierarchy` has no
- * endpoint using it yet, for forward compatibility with those later phases.
+ * covers FR-007's full-descendant-graph endpoint. `removeHelper` (`DELETE
+ * agents/{id}/helpers/{helperAgentId}`, Phase 5/US4) is a later addition to
+ * this same file, once its backend endpoint lands — not added yet.
  */
 export const agentHelperApi = createApi({
   reducerPath: 'llm-client-agentHelperApi',
@@ -23,6 +20,10 @@ export const agentHelperApi = createApi({
     listHelpers: builder.query<{ data: AgentHelper[] }, { agentId: string }>({
       query: ({ agentId }) => `/agents/${agentId}/helpers`,
       providesTags: ['AgentHelpers'],
+    }),
+    listHelperHierarchy: builder.query<{ data: AgentHelperHierarchyEntry[]; truncated: boolean }, { agentId: string }>({
+      query: ({ agentId }) => `/agents/${agentId}/helpers/hierarchy`,
+      providesTags: ['AgentHelperHierarchy'],
     }),
     assignHelper: builder.mutation<AgentHelper, { agentId: string; helperAgentId: string }>({
       query: ({ agentId, helperAgentId }) => ({
@@ -35,4 +36,4 @@ export const agentHelperApi = createApi({
   }),
 });
 
-export const { useListHelpersQuery, useAssignHelperMutation } = agentHelperApi;
+export const { useListHelpersQuery, useListHelperHierarchyQuery, useAssignHelperMutation } = agentHelperApi;
