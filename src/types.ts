@@ -114,7 +114,7 @@ export type RunKind = 'interactive' | 'system_initiated';
 
 export type RunEndState = 'in_progress' | 'completed' | 'failed' | 'stopped_early' | 'abandoned';
 
-export type ActionType = 'llm_request' | 'tool_invocation' | 'context_reshape';
+export type ActionType = 'llm_request' | 'tool_invocation' | 'context_reshape' | 'delegation';
 
 export type ActionOutcome = 'in_progress' | 'awaiting_confirmation' | 'success' | 'failure' | 'unfinished';
 
@@ -435,4 +435,26 @@ export interface EvalCaseResultSummary {
   expectation_results: ExpectationResultDetail[];
   error_message: string | null;
   created_at: string;
+}
+
+// Delegation protocol types (data-model.md §9, 098-delegation-protocol)
+
+export type DelegationStatus = 'in_progress' | 'completed' | 'exhausted' | 'failed';
+
+export interface Delegation {
+  id: string;
+  parent_conversation_id: string;
+  helper_agent_id: string;
+  helper_agent_name: string;
+  helper_conversation_id: string;
+  depth: number;
+  status: DelegationStatus;
+  task: string;
+  context: string | null;
+  parent_run_id: string | null;
+  parent_action_id: string | null;
+  helper_run_id: string | null;
+  outcome_summary: string | null;
+  started_at: string;
+  completed_at: string | null;
 }
