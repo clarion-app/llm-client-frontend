@@ -5,6 +5,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { runApi } from './runApi';
+import { delegationApi } from './delegationApi';
 import type { RunSummary, StepSummary, PaginatedEnvelope } from './types';
 
 /**
@@ -55,6 +56,10 @@ vi.mock('@clarion-app/frontend-base', () => ({
       return { data: { data: [], meta: { current_page: 1, per_page: 50, total: 0, last_page: 1 } } };
     }
 
+    if (/^\/agent-runs\/[^/]+\/delegations$/.test(path)) {
+      return { data: [] };
+    }
+
     if (/^\/agent-runs\/[^/]+\/steps$/.test(path)) {
       return {
         data: {
@@ -84,8 +89,9 @@ function createTestStore() {
   return configureStore({
     reducer: {
       [runApi.reducerPath]: runApi.reducer,
+      [delegationApi.reducerPath]: delegationApi.reducer,
     },
-    middleware: (getDefault) => getDefault().concat(runApi.middleware),
+    middleware: (getDefault) => getDefault().concat(runApi.middleware, delegationApi.middleware),
   });
 }
 

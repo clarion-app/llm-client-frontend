@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   useGetRunQuery,
   useGetRunStepsQuery,
@@ -9,11 +9,12 @@ import {
   useLazyGetStepActionsQuery,
   useLazyGetActionChildrenQuery,
 } from './runApi';
+import { useGetDelegationsForRunQuery } from './delegationApi';
 import { RunStepNode } from './RunStepNode';
 import { RunActionNode } from './RunActionNode';
 import { RunElementDetail } from './RunElementDetail';
 import type { RunElementSelection } from './RunElementDetail';
-import type { RunSummary, StepSummary, ActionSummary, PaginatedEnvelope } from './types';
+import type { RunSummary, StepSummary, ActionSummary, PaginatedEnvelope, Delegation } from './types';
 
 /**
  * RunDiagram — orchestrates a run's diagram (US1): fetches the run summary
@@ -238,10 +239,23 @@ interface ActionContainerProps {
   overlap: boolean;
   autoExpand: boolean;
   onSelect: (selection: RunElementSelection) => void;
+  /** parent_action_id → Delegation lookup for the whole run (098-delegation-protocol, US3). */
+  delegationsByActionId: Record<string, Delegation>;
+  /** Navigates the diagram to a delegation's own helper_run_id (US3). */
+  onOpenDelegation: (helperRunId: string) => void;
 }
 
 /** One action node plus its own lazily-fetched (or auto-expanded) children — recursable for nested actions (FR-002). */
-function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand, onSelect }: ActionContainerProps): React.ReactElement {
+function ActionContainer({
+  runId,
+  action,
+  maxDurationMs,
+  overlap,
+  autoExpand,
+  onSelect,
+  delegationsByActionId,
+  onOpenDelegation,
+}: ActionContainerProps): React.ReactElement {
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const isExpanded = action.has_children && (autoExpand || manuallyExpanded);
 
@@ -265,6 +279,8 @@ function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand, on
       isExpanded={isExpanded}
       onToggleExpand={() => setManuallyExpanded((v) => !v)}
       onSelect={() => onSelect({ type: 'action', actionId: action.id })}
+      delegation={delegationsByActionId[action.id]}
+      onOpenDelegation={onOpenDelegation}
     >
       {isExpanded && (
         <>
@@ -277,6 +293,8 @@ function ActionContainer({ runId, action, maxDurationMs, overlap, autoExpand, on
                 overlap={overlappingChildIds.has(child.id)}
                 autoExpand={autoExpand}
                 onSelect={onSelect}
+                delegationsByActionId={delegationsByActionId}
+                onOpenDelegation={onOpenDelegation}
               />
             </VirtualRow>
           ))}
@@ -297,10 +315,22 @@ interface StepContainerProps {
   maxDurationMs: number;
   autoExpand: boolean;
   onSelect: (selection: RunElementSelection) => void;
+  /** parent_action_id → Delegation lookup for the whole run (098-delegation-protocol, US3). */
+  delegationsByActionId: Record<string, Delegation>;
+  /** Navigates the diagram to a delegation's own helper_run_id (US3). */
+  onOpenDelegation: (helperRunId: string) => void;
 }
 
 /** One step node plus its own lazily-fetched (or auto-expanded) top-level actions. */
-function StepContainer({ runId, step, maxDurationMs, autoExpand, onSelect }: StepContainerProps): React.ReactElement {
+function StepContainer({
+  runId,
+  step,
+  maxDurationMs,
+  autoExpand,
+  onSelect,
+  delegationsByActionId,
+  onOpenDelegation,
+}: StepContainerProps): React.ReactElement {
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const isExpanded = autoExpand || manuallyExpanded;
 
@@ -335,6 +365,8 @@ function StepContainer({ runId, step, maxDurationMs, autoExpand, onSelect }: Ste
                 overlap={overlappingIds.has(action.id)}
                 autoExpand={autoExpand}
                 onSelect={onSelect}
+                delegationsByActionId={delegationsByActionId}
+                onOpenDelegation={onOpenDelegation}
               />
             </VirtualRow>
           ))}
@@ -364,6 +396,7 @@ export interface RunDiagramProps {
 
 export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.ReactElement {
   const [selected, setSelected] = useState<RunElementSelection | null>(null);
+  const navigate = useNavigate();
 
   // `useParams()` outside a Router returns `{}` rather than throwing, so a
   // caller that passes `runId` explicitly (the tests, and any in-context
@@ -382,6 +415,24 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
   const stepsAcc = useAccumulatedPages<StepSummary>(stepsEnvelope, (page) =>
     triggerGetRunSteps({ runId, page }).unwrap(),
   );
+
+  // Every delegation made during this run (098-delegation-protocol, US3),
+  // indexed by the parent_action_id it names — the concrete anchor for a
+  // "→ helper run" drill-down link on the delegation-typed action row that
+  // produced it (contracts/delegation-protocol-api.md §4).
+  const { data: delegations } = useGetDelegationsForRunQuery(runId, { skip: runId === '' });
+  const delegationsByActionId = useMemo(() => {
+    const map: Record<string, Delegation> = {};
+    (Array.isArray(delegations) ? delegations : []).forEach((delegation) => {
+      if (delegation.parent_action_id) {
+        map[delegation.parent_action_id] = delegation;
+      }
+    });
+    return map;
+  }, [delegations]);
+  const handleOpenDelegation = (helperRunId: string) => {
+    navigate(`/clarion-app/llm-client/runs/${helperRunId}`);
+  };
 
   // No id in the prop and none in the route — nothing to render but the same
   // uniform "not available" state an absent/foreign run gets (FR-014); never
@@ -453,6 +504,8 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
                   maxDurationMs={stepMaxDuration}
                   autoExpand={isSmallRun}
                   onSelect={setSelected}
+                  delegationsByActionId={delegationsByActionId}
+                  onOpenDelegation={handleOpenDelegation}
                 />
               </VirtualRow>
             ))}

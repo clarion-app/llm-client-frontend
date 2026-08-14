@@ -54,7 +54,8 @@
                 "llmClientEvalDashboardApi",
                 "llmClientAgentBrowserApi",
                 "llmClientAgentShareApi",
-                "llmClientAgentHelperApi"
+                "llmClientAgentHelperApi",
+                "llmClientDelegationApi"
             ],
             "routes": [
                 {

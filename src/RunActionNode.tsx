@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ActionSummary } from './types';
+import type { ActionSummary, Delegation } from './types';
 
 /**
  * RunActionNode — one action in a run's diagram: type, target, outcome, a
@@ -24,6 +24,15 @@ export interface RunActionNodeProps {
   /** Opens this action in the detail panel (FR-005, US2). Optional so this component stays usable without a detail panel wired up. */
   onSelect?: () => void;
   children?: React.ReactNode;
+  /**
+   * The Delegation row naming this action as its own `parent_action_id`, if
+   * one exists (098-delegation-protocol, US3, contracts/delegation-protocol-api.md
+   * §4). Resolved by the caller (RunDiagram.tsx) from a run-wide lookup map,
+   * never fetched here.
+   */
+  delegation?: Delegation;
+  /** Navigates the diagram to a delegation's own `helper_run_id` (US3). */
+  onOpenDelegation?: (helperRunId: string) => void;
 }
 
 function actionStatusLabel(action: ActionSummary): string {
@@ -51,9 +60,13 @@ export function RunActionNode({
   onToggleExpand,
   onSelect,
   children,
+  delegation,
+  onOpenDelegation,
 }: RunActionNodeProps): React.ReactElement {
   const isRunning = action.outcome === 'in_progress' && action.ended_at === null;
   const isFailed = action.outcome === 'failure';
+  const delegationHelperRunId =
+    action.action_type === 'delegation' ? delegation?.helper_run_id ?? null : null;
 
   const widthPct =
     !isRunning && action.duration_ms !== null && maxDurationMs > 0
@@ -91,6 +104,19 @@ export function RunActionNode({
           <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-800">
             concurrent
           </span>
+        )}
+        {delegationHelperRunId && (
+          <button
+            type="button"
+            data-testid={`run-action-delegation-link-${action.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDelegation?.(delegationHelperRunId);
+            }}
+            className="run-action-node__delegation-link text-xs text-blue-700 underline"
+          >
+            → helper run
+          </button>
         )}
       </div>
 
