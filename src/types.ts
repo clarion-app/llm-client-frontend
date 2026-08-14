@@ -202,6 +202,31 @@ export interface AgentUsageSummary {
   cost: AgentCostSummary;
 }
 
+// Agent sharing types (096-agent-sharing, data-model.md §10)
+
+export interface AgentShareOwner {
+  id: string;
+  name: string;
+}
+
+export type AgentSharePermission = 'use' | 'use_and_edit';
+
+export interface AgentShare {
+  id: string;
+  agent_id: string;
+  recipient_user_id: string;
+  recipient_name: string;
+  permission: AgentSharePermission;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InstallationUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface AgentSearchEntry {
   id: string;
   name: string;
@@ -214,6 +239,10 @@ export interface AgentSearchEntry {
   operation_count: number;
   memory_enabled: boolean;
   usage: AgentUsageSummary;
+  // New (096-agent-sharing, data-model.md §10):
+  is_shared: boolean;
+  shared_by: AgentShareOwner | null;
+  permission: 'owner' | AgentSharePermission;
 }
 
 export type AgentSearchEnvelope = PaginatedEnvelope<AgentSearchEntry> & { total_unfiltered: number };
