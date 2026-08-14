@@ -9,8 +9,8 @@ import type { AgentHelper, AgentHelperHierarchyEntry } from './types';
  * backend endpoints US1+US2 (Phase 3) add — `GET`/`POST agents/{id}/helpers`.
  * `listHelperHierarchy` (`GET agents/{id}/helpers/hierarchy`, Phase 4/US3)
  * covers FR-007's full-descendant-graph endpoint. `removeHelper` (`DELETE
- * agents/{id}/helpers/{helperAgentId}`, Phase 5/US4) is a later addition to
- * this same file, once its backend endpoint lands — not added yet.
+ * agents/{id}/helpers/{helperAgentId}`, Phase 5/US4) removes the assignment
+ * itself, distinct from a helper merely showing as deactivated/gone.
  */
 export const agentHelperApi = createApi({
   reducerPath: 'llm-client-agentHelperApi',
@@ -33,7 +33,19 @@ export const agentHelperApi = createApi({
       }),
       invalidatesTags: ['AgentHelpers', 'AgentHelperHierarchy'],
     }),
+    removeHelper: builder.mutation<void, { agentId: string; helperAgentId: string }>({
+      query: ({ agentId, helperAgentId }) => ({
+        url: `/agents/${agentId}/helpers/${helperAgentId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['AgentHelpers', 'AgentHelperHierarchy'],
+    }),
   }),
 });
 
-export const { useListHelpersQuery, useListHelperHierarchyQuery, useAssignHelperMutation } = agentHelperApi;
+export const {
+  useListHelpersQuery,
+  useListHelperHierarchyQuery,
+  useAssignHelperMutation,
+  useRemoveHelperMutation,
+} = agentHelperApi;

@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { useListHelpersQuery, useListHelperHierarchyQuery, useAssignHelperMutation } from './agentHelperApi';
+import {
+  useListHelpersQuery,
+  useListHelperHierarchyQuery,
+  useAssignHelperMutation,
+  useRemoveHelperMutation,
+} from './agentHelperApi';
 import { useSearchAgentsQuery } from './agentBrowserApi';
 import type { HelperStatus } from './types';
 
@@ -50,6 +55,20 @@ function statusLabel(status: HelperStatus): string {
   if (status === 'active') return 'Active';
   if (status === 'deactivated') return 'Deactivated';
   return 'Gone';
+}
+
+// Reuses AgentCard's existing in-service/retired pill styling
+// (`inline-flex items-center rounded-full ... px-2 py-0.5 text-xs
+// font-medium`) for visual consistency, with 'gone' distinguished by its own
+// color the same way AgentCard's shared-by badge gets its own color.
+function statusBadgeClassName(status: HelperStatus): string {
+  if (status === 'active') {
+    return 'inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium';
+  }
+  if (status === 'deactivated') {
+    return 'inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800';
+  }
+  return 'inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800';
 }
 
 // RTK Query rejects with either a FetchBaseQueryError ({ status, data }) or
@@ -109,6 +128,7 @@ export function ManageHelpersPanel({ agentId }: ManageHelpersPanelProps): React.
   const { data: hierarchyData } = useListHelperHierarchyQuery({ agentId }, { skip: !hierarchyExpanded });
   const { data: candidatesData } = useSearchAgentsQuery({});
   const [assignHelper, { isLoading: isAssigning }] = useAssignHelperMutation();
+  const [removeHelper] = useRemoveHelperMutation();
 
   const helpers = useMemo(() => helpersData?.data ?? [], [helpersData]);
   const hierarchyEntries = useMemo(() => hierarchyData?.data ?? [], [hierarchyData]);
@@ -147,6 +167,10 @@ export function ManageHelpersPanel({ agentId }: ManageHelpersPanelProps): React.
     }
   };
 
+  const handleRemove = (helperAgentId: string) => {
+    void removeHelper({ agentId, helperAgentId }).unwrap();
+  };
+
   return (
     <div data-testid="manage-helpers-panel">
       <button type="button" data-testid="manage-helpers-toggle" onClick={() => setExpanded((prev) => !prev)}>
@@ -165,14 +189,24 @@ export function ManageHelpersPanel({ agentId }: ManageHelpersPanelProps): React.
                 {helpers.map((helper) => (
                   <li key={helper.id} data-testid={`agent-helper-row-${helper.helper_agent_id}`}>
                     {helper.helper_name} — {truncatePurpose(helper.helper_purpose)}{' '}
-                    <span data-testid={`agent-helper-status-${helper.helper_agent_id}`}>
+                    <span
+                      data-testid={`agent-helper-status-${helper.helper_agent_id}`}
+                      className={statusBadgeClassName(helper.helper_status)}
+                    >
                       {statusLabel(helper.helper_status)}
                     </span>
                     {helper.within_bounds === false && (
                       <span data-testid={`agent-helper-warning-${helper.helper_agent_id}`}>
                         Exceeds parent — narrowed automatically
                       </span>
-                    )}
+                    )}{' '}
+                    <button
+                      type="button"
+                      data-testid={`agent-helper-remove-${helper.helper_agent_id}`}
+                      onClick={() => handleRemove(helper.helper_agent_id)}
+                    >
+                      Remove
+                    </button>
                   </li>
                 ))}
               </ul>

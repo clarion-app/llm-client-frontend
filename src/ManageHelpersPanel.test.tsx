@@ -588,3 +588,159 @@ describe('ManageHelpersPanel — 097-subagent-model US3/FR-007: view full chain 
     expect(indentC).toBeGreaterThan(indentB);
   });
 });
+
+/**
+ * 097-subagent-model, Phase 5 (US4) — a retired or removed helper does not
+ * break its parent. The `'gone'` status is this phase's own addition to the
+ * badge fixtures already covered above (`'active'`/`'deactivated'`); it must
+ * render visually/testid-distinct text from both. Neither the "Remove"
+ * button nor `useRemoveHelperMutation` is wired into `ManageHelpersPanel.tsx`
+ * yet (T061 is the implementation task; this file's own top-of-file
+ * `vi.mock('./agentHelperApi', ...)` already stubs `useRemoveHelperMutation`
+ * ahead of need, mirroring T021's own precedent for
+ * `useListHelperHierarchyQuery`), so the tests below are expected to fail
+ * against the current component with a "missing element" error (no
+ * `agent-helper-remove-*` button rendered) — not a fixture mistake.
+ */
+describe('ManageHelpersPanel — 097-subagent-model US4: gone status badge', () => {
+  it("renders a 'Gone' badge for a helper whose helper_status is 'gone', distinct from 'active'/'deactivated'", () => {
+    useListHelpersQuery.mockReturnValue({
+      data: {
+        data: [
+          makeHelper({
+            helper_agent_id: 'agent-helper-gone',
+            helper_name: 'Retired Helper',
+            helper_status: 'gone',
+          }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    });
+
+    render(<ManageHelpersPanel agentId={PARENT_ID} />);
+    expand();
+
+    const badge = screen.getByTestId('agent-helper-status-agent-helper-gone');
+    expect(badge.textContent ?? '').toMatch(/gone/i);
+    expect(badge.textContent ?? '').not.toMatch(/^active$/i);
+    expect(badge.textContent ?? '').not.toMatch(/deactivated/i);
+  });
+});
+
+/**
+ * 097-subagent-model, Phase 5 (US4) — removing the assignment itself
+ * (`DELETE /agents/{id}/helpers/{helperAgentId}`) is a distinct, explicit
+ * action from a helper merely showing as deactivated/gone. Mirrors
+ * `ManageSharingPanel.test.tsx`'s own "revoke grant" block directly — same
+ * three-test shape (button present, mutation called with the right
+ * arguments, and a simulated post-mutation refetch dropping the removed row
+ * while another still-listed row remains), same technique for simulating
+ * `invalidatesTags`'s effect: since the mocked hook carries no cache of its
+ * own, a real invalidation-triggered refetch is simulated by updating
+ * `useListHelpersQuery`'s mocked return value and re-rendering with the same
+ * props.
+ */
+describe('ManageHelpersPanel — 097-subagent-model US4: remove helper', () => {
+  it('renders a "Remove" button for each listed helper', () => {
+    useListHelpersQuery.mockReturnValue({
+      data: {
+        data: [
+          makeHelper({ helper_agent_id: 'agent-helper-1', helper_name: 'Billing Lookup Helper' }),
+          makeHelper({
+            id: 'helper-assignment-2',
+            helper_agent_id: 'agent-helper-2',
+            helper_name: 'Refund Processor Helper',
+          }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    });
+
+    render(<ManageHelpersPanel agentId={PARENT_ID} />);
+    expand();
+
+    const firstRemove = screen.getByTestId('agent-helper-remove-agent-helper-1');
+    const secondRemove = screen.getByTestId('agent-helper-remove-agent-helper-2');
+    expect(firstRemove.textContent ?? '').toMatch(/remove/i);
+    expect(secondRemove.textContent ?? '').toMatch(/remove/i);
+  });
+
+  it('calls useRemoveHelperMutation with the correct agentId/helperAgentId when a row\'s "Remove" button is clicked', async () => {
+    useListHelpersQuery.mockReturnValue({
+      data: { data: [makeHelper({ helper_agent_id: 'agent-helper-1', helper_name: 'Billing Lookup Helper' })] },
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    });
+
+    render(<ManageHelpersPanel agentId={PARENT_ID} />);
+    expand();
+
+    fireEvent.click(screen.getByTestId('agent-helper-remove-agent-helper-1'));
+
+    await waitFor(() => {
+      expect(removeHelperTrigger).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: PARENT_ID, helperAgentId: 'agent-helper-1' }),
+      );
+    });
+  });
+
+  it('on a successful remove, the helper list re-fetches and the removed helper no longer appears while another still-listed helper remains', async () => {
+    useListHelpersQuery.mockReturnValue({
+      data: {
+        data: [
+          makeHelper({ helper_agent_id: 'agent-helper-1', helper_name: 'Billing Lookup Helper' }),
+          makeHelper({
+            id: 'helper-assignment-2',
+            helper_agent_id: 'agent-helper-2',
+            helper_name: 'Refund Processor Helper',
+          }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    });
+
+    const { rerender } = render(<ManageHelpersPanel agentId={PARENT_ID} />);
+    expand();
+
+    expect(screen.getByTestId('agent-helper-row-agent-helper-1')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-helper-row-agent-helper-2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('agent-helper-remove-agent-helper-1'));
+
+    await waitFor(() => {
+      expect(removeHelperTrigger).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: PARENT_ID, helperAgentId: 'agent-helper-1' }),
+      );
+    });
+
+    // Simulate the cache invalidation this mutation's `invalidatesTags:
+    // ['AgentHelpers', 'AgentHelperHierarchy']` triggers in the real store:
+    // useListHelpersQuery's next call now returns the post-remove list.
+    useListHelpersQuery.mockReturnValue({
+      data: {
+        data: [
+          makeHelper({
+            id: 'helper-assignment-2',
+            helper_agent_id: 'agent-helper-2',
+            helper_name: 'Refund Processor Helper',
+          }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    });
+
+    rerender(<ManageHelpersPanel agentId={PARENT_ID} />);
+
+    expect(screen.queryByTestId('agent-helper-row-agent-helper-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('agent-helper-row-agent-helper-2')).toBeInTheDocument();
+  });
+});
