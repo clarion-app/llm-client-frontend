@@ -230,6 +230,7 @@ function makeDelegation(overrides: Partial<Delegation> = {}): Delegation {
     outcome_summary: 'Completed normally.',
     started_at: '2026-08-14T10:00:01.000000Z',
     completed_at: '2026-08-14T10:00:04.000000Z',
+    batch_id: null,
     ...overrides,
   };
 }

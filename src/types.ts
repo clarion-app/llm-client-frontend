@@ -437,9 +437,14 @@ export interface EvalCaseResultSummary {
   created_at: string;
 }
 
-// Delegation protocol types (data-model.md §9, 098-delegation-protocol)
+// Delegation protocol types (data-model.md §9, 098-delegation-protocol).
+// 'queued' and batch_id added by 101-parallel-subagent-execution
+// (data-model.md §1, contracts §2) -- a batch member's row starts
+// 'queued' (before DelegationConcurrencyGate admits it to 'in_progress')
+// and carries the batch it was dispatched with; both are null/absent for
+// every delegation created by the pre-existing solo delegate() path.
 
-export type DelegationStatus = 'in_progress' | 'completed' | 'exhausted' | 'failed';
+export type DelegationStatus = 'queued' | 'in_progress' | 'completed' | 'exhausted' | 'failed';
 
 export interface Delegation {
   id: string;
@@ -457,4 +462,7 @@ export interface Delegation {
   outcome_summary: string | null;
   started_at: string;
   completed_at: string | null;
+  /** 101-parallel-subagent-execution: null for a solo delegation, shared
+   *  by every member of the same concurrent batch otherwise. */
+  batch_id: string | null;
 }
