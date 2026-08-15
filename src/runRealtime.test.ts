@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
-import type { RunSummary, StepSummary, ActionSummary, ActionDetail } from './types';
+import type { RunSummary, StepSummary, ActionSummary, ActionDetail, ArrangementDelegation, ArrangementResponse } from './types';
 
 // Phase 6 (T058), User Story 3 — mirrors serverStatusRealtime.test.ts's own
 // structure exactly: a real RTK Query store (not a mocked `util`), a mocked
@@ -32,6 +32,8 @@ const RUN_ID = 'run-1';
 const STEP_ID = 'step-1';
 const PARENT_ACTION_ID = 'action-parent';
 const CHILD_ACTION_ID = 'action-child';
+const HELPER_RUN_ID = 'run-helper-1';
+const DELEGATION_ID = 'delegation-1';
 
 vi.mock('./config', () => ({
   backend: {
@@ -49,12 +51,14 @@ let stepsSeed: { data: StepSummary[]; meta: any } | null = null;
 let stepActionsSeed: { data: ActionSummary[]; meta: any } | null = null;
 let actionChildrenSeed: { data: ActionSummary[]; meta: any } | null = null;
 let actionDetailSeed: ActionDetail | null = null;
+let arrangementSeed: ArrangementResponse | null = null;
 
 let runFetchCount = 0;
 let stepsFetchCount = 0;
 let stepActionsFetchCount = 0;
 let actionChildrenFetchCount = 0;
 let actionDetailFetchCount = 0;
+let arrangementFetchCount = 0;
 
 vi.mock('@clarion-app/frontend-base', () => ({
   createBackendConfig: () => ({
@@ -83,6 +87,10 @@ vi.mock('@clarion-app/frontend-base', () => ({
     if (url === `/agent-runs/${RUN_ID}/actions/${PARENT_ACTION_ID}`) {
       actionDetailFetchCount += 1;
       return { data: actionDetailSeed };
+    }
+    if (url === `/agent-runs/${RUN_ID}/arrangement`) {
+      arrangementFetchCount += 1;
+      return { data: arrangementSeed };
     }
     return { data: {} };
   },
@@ -148,6 +156,33 @@ const makeActionSummary = (overrides: Partial<ActionSummary> = {}): ActionSummar
   ...overrides,
 });
 
+const makeDelegation = (overrides: Partial<ArrangementDelegation> = {}): ArrangementDelegation => ({
+  id: DELEGATION_ID,
+  parent_run_id: RUN_ID,
+  parent_action_id: PARENT_ACTION_ID,
+  helper_run_id: HELPER_RUN_ID,
+  helper_agent_id: 'agent-helper-1',
+  helper_agent_name: 'Invoice Line-Item Extractor',
+  depth: 1,
+  status: 'completed',
+  batch_id: null,
+  started_at: '2026-08-15T10:00:01.000000Z',
+  completed_at: '2026-08-15T10:00:04.000000Z',
+  ...overrides,
+});
+
+const makeArrangement = (overrides: Partial<ArrangementResponse> = {}): ArrangementResponse => ({
+  root_run_id: RUN_ID,
+  has_delegations: true,
+  truncated: false,
+  runs: {
+    [RUN_ID]: makeRunSummary(),
+    [HELPER_RUN_ID]: makeRunSummary({ id: HELPER_RUN_ID, end_state: 'completed', duration_ms: 3000 }),
+  },
+  delegations: [makeDelegation()],
+  ...overrides,
+});
+
 function handlerFor(eventName: string) {
   const entry = registered.find((r) => r.event === eventName);
   if (!entry) {
@@ -157,16 +192,17 @@ function handlerFor(eventName: string) {
 }
 
 describe('runRealtime — registration', () => {
-  it('registers a handler for all three run event names', () => {
+  it('registers a handler for all four run/delegation event names', () => {
     const names = registered.map((r) => r.event);
     expect(names).toEqual(
       expect.arrayContaining([
         '.ClarionApp\\LlmClient\\Events\\RunUpdated',
         '.ClarionApp\\LlmClient\\Events\\RunStepUpdated',
         '.ClarionApp\\LlmClient\\Events\\RunActionUpdated',
+        '.ClarionApp\\LlmClient\\Events\\DelegationUpdated',
       ]),
     );
-    expect(registered).toHaveLength(3);
+    expect(registered).toHaveLength(4);
   });
 });
 
@@ -174,6 +210,8 @@ describe('runRealtime — RunUpdated handler', () => {
   beforeEach(() => {
     runSeed = makeRunSummary();
     runFetchCount = 0;
+    arrangementSeed = makeArrangement();
+    arrangementFetchCount = 0;
   });
 
   it('replaces the cached run entry in place when the run id is cached, without an extra fetch', async () => {
@@ -199,6 +237,45 @@ describe('runRealtime — RunUpdated handler', () => {
 
     const cached = runApi.endpoints.getRun.select('run-elsewhere')(store.getState() as any).data;
     expect(cached).toBeUndefined();
+  });
+
+  // 106-multi-agent-run-view (US2, T031, tasks.md).
+  it('also patches the matching run entry inside a cached getRunArrangement result\'s runs map, without an extra fetch', async () => {
+    const store = createTestStore();
+    await store.dispatch(runApi.endpoints.getRunArrangement.initiate(RUN_ID));
+    expect(arrangementFetchCount).toBe(1);
+
+    const pushed = makeRunSummary({
+      id: HELPER_RUN_ID,
+      end_state: 'failed',
+      end_reason: 'boom',
+      ended_at: '2026-08-15T10:00:05.000000Z',
+      duration_ms: 4000,
+    });
+    handlerFor('.ClarionApp\\LlmClient\\Events\\RunUpdated')(pushed, store.dispatch);
+
+    const cached = runApi.endpoints.getRunArrangement.select(RUN_ID)(store.getState() as any).data;
+    expect(cached?.runs[HELPER_RUN_ID]).toEqual(pushed);
+    // Upsert, not a re-fetch of the whole arrangement.
+    expect(arrangementFetchCount).toBe(1);
+  });
+
+  it('does not fabricate a new runs[] entry inside a cached arrangement for a run id the arrangement never named', async () => {
+    const store = createTestStore();
+    await store.dispatch(runApi.endpoints.getRunArrangement.initiate(RUN_ID));
+
+    handlerFor('.ClarionApp\\LlmClient\\Events\\RunUpdated')(makeRunSummary({ id: 'run-elsewhere' }), store.dispatch);
+
+    const cached = runApi.endpoints.getRunArrangement.select(RUN_ID)(store.getState() as any).data;
+    expect(cached?.runs).not.toHaveProperty('run-elsewhere');
+  });
+
+  it('is a no-op for the arrangement patch (does not throw) when no getRunArrangement result is cached at all', () => {
+    const store = createTestStore();
+
+    expect(() =>
+      handlerFor('.ClarionApp\\LlmClient\\Events\\RunUpdated')(makeRunSummary(), store.dispatch),
+    ).not.toThrow();
   });
 });
 
@@ -412,5 +489,90 @@ describe('runRealtime — RunActionUpdated triggers an open detail panel to re-f
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(actionDetailFetchCount).toBe(1);
+  });
+});
+
+// 106-multi-agent-run-view (US2, T027, tasks.md).
+describe('runRealtime — DelegationUpdated handler', () => {
+  beforeEach(() => {
+    arrangementSeed = makeArrangement();
+    arrangementFetchCount = 0;
+  });
+
+  it('replaces an existing delegation in a cached getRunArrangement result\'s delegations array in place, without an extra fetch', async () => {
+    const store = createTestStore();
+    await store.dispatch(runApi.endpoints.getRunArrangement.initiate(RUN_ID));
+    expect(arrangementFetchCount).toBe(1);
+
+    const pushed = makeDelegation({ status: 'failed', completed_at: '2026-08-15T10:00:06.000000Z' });
+    handlerFor('.ClarionApp\\LlmClient\\Events\\DelegationUpdated')(pushed, store.dispatch);
+
+    const cached = runApi.endpoints.getRunArrangement.select(RUN_ID)(store.getState() as any).data;
+    expect(cached?.delegations).toHaveLength(1);
+    expect(cached?.delegations[0]).toEqual(pushed);
+    // Upsert, not a re-fetch of the whole arrangement.
+    expect(arrangementFetchCount).toBe(1);
+  });
+
+  it('inserts a new delegation whose parent_run_id is already a known run into a cached arrangement\'s delegations array', async () => {
+    const store = createTestStore();
+    await store.dispatch(runApi.endpoints.getRunArrangement.initiate(RUN_ID));
+
+    const newDelegation = makeDelegation({
+      id: 'delegation-2',
+      parent_run_id: HELPER_RUN_ID, // already a known run in this arrangement's runs map
+      helper_run_id: null,
+      status: 'queued',
+      completed_at: null,
+    });
+    handlerFor('.ClarionApp\\LlmClient\\Events\\DelegationUpdated')(newDelegation, store.dispatch);
+
+    const cached = runApi.endpoints.getRunArrangement.select(RUN_ID)(store.getState() as any).data;
+    const ids = cached?.delegations.map((d) => d.id);
+    expect(ids).toEqual(expect.arrayContaining([DELEGATION_ID, 'delegation-2']));
+  });
+
+  it('invalidates the Arrangement tag as a fallback when the delegation names a helper_run_id not yet present in the cached runs map', async () => {
+    const store = createTestStore();
+    await store.dispatch(runApi.endpoints.getRunArrangement.initiate(RUN_ID));
+    expect(arrangementFetchCount).toBe(1);
+
+    const admitted = makeDelegation({
+      id: 'delegation-3',
+      parent_run_id: RUN_ID,
+      helper_run_id: 'run-brand-new-helper',
+      status: 'in_progress',
+      completed_at: null,
+    });
+    handlerFor('.ClarionApp\\LlmClient\\Events\\DelegationUpdated')(admitted, store.dispatch);
+
+    await vi.waitFor(() => expect(arrangementFetchCount).toBe(2));
+  });
+
+  it('is a no-op (does not throw, does not fabricate a cache entry) when no getRunArrangement result is cached at all', () => {
+    const store = createTestStore();
+
+    expect(() =>
+      handlerFor('.ClarionApp\\LlmClient\\Events\\DelegationUpdated')(makeDelegation(), store.dispatch),
+    ).not.toThrow();
+
+    const cached = runApi.endpoints.getRunArrangement.select(RUN_ID)(store.getState() as any).data;
+    expect(cached).toBeUndefined();
+  });
+
+  it('does not insert a delegation into a cached arrangement it does not belong to (parent_run_id names no known run in that arrangement)', async () => {
+    const store = createTestStore();
+    await store.dispatch(runApi.endpoints.getRunArrangement.initiate(RUN_ID));
+
+    const unrelated = makeDelegation({
+      id: 'delegation-unrelated',
+      parent_run_id: 'run-in-a-different-arrangement-entirely',
+      helper_run_id: 'run-unrelated-helper',
+    });
+    handlerFor('.ClarionApp\\LlmClient\\Events\\DelegationUpdated')(unrelated, store.dispatch);
+
+    const cached = runApi.endpoints.getRunArrangement.select(RUN_ID)(store.getState() as any).data;
+    const ids = cached?.delegations.map((d) => d.id);
+    expect(ids).not.toContain('delegation-unrelated');
   });
 });
