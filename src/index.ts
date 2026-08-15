@@ -13,6 +13,7 @@ import ApiCallConfirmation from "./ApiCallConfirmation";
 import { runApi as llmClientRunApi } from "./runApi";
 import { RunDiagram } from "./RunDiagram";
 import { RunsList } from "./RunsList";
+import { RunArrangement } from "./RunArrangement";
 import { evalDashboardApi as llmClientEvalDashboardApi } from "./evalDashboardApi";
 import { EvalDashboard } from "./EvalDashboard";
 import { EvalRunBreakdown } from "./EvalRunBreakdown";
@@ -25,7 +26,7 @@ import { delegationApi as llmClientDelegationApi } from "./delegationApi";
 
 export { backend, updateFrontend } from './config';
 
-export { llmClientConversationApi, llmClientServerApi, llmClientModelApi, llmClientMessageApi, llmClientRoleAssignmentApi, llmClientServerStatusApi, llmClientRunApi, llmClientEvalDashboardApi, llmClientAgentBrowserApi, llmClientAgentShareApi, llmClientAgentHelperApi, llmClientDelegationApi, useConfirmApiCallMutation, ApiCallConfirmation, Conversation, Conversations, ModelSetup, ModelSetupRedirect, RunDiagram, RunsList, EvalDashboard, EvalRunBreakdown, EvalCaseDetail, AgentBrowser };
+export { llmClientConversationApi, llmClientServerApi, llmClientModelApi, llmClientMessageApi, llmClientRoleAssignmentApi, llmClientServerStatusApi, llmClientRunApi, llmClientEvalDashboardApi, llmClientAgentBrowserApi, llmClientAgentShareApi, llmClientAgentHelperApi, llmClientDelegationApi, useConfirmApiCallMutation, ApiCallConfirmation, Conversation, Conversations, ModelSetup, ModelSetupRedirect, RunDiagram, RunsList, RunArrangement, EvalDashboard, EvalRunBreakdown, EvalCaseDetail, AgentBrowser };
 
 // Side-effect import: registers handler for ServerModelsRefreshed broadcasts
 import './serverStatusRealtime';

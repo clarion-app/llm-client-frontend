@@ -95,6 +95,10 @@
                     "element": "<RunDiagram />"
                 },
                 {
+                    "path": "/clarion-app/llm-client/runs/:id/arrangement",
+                    "element": "<RunArrangement />"
+                },
+                {
                     "path": "/clarion-app/llm-client/eval-dashboard/:agentLabel",
                     "element": "<EvalDashboard />"
                 },

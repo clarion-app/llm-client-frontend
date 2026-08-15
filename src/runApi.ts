@@ -1,12 +1,12 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { createBaseQuery } from '@clarion-app/frontend-base';
 import { backend } from './config';
-import type { RunSummary, StepSummary, ActionSummary, ActionDetail, PaginatedEnvelope } from './types';
+import type { RunSummary, StepSummary, ActionSummary, ActionDetail, PaginatedEnvelope, ArrangementResponse } from './types';
 
 export const runApi = createApi({
   reducerPath: 'llm-client-runApi',
   baseQuery: createBaseQuery({ routePrefix: '/api/clarion-app/llm-client', backendConfig: backend }),
-  tagTypes: ['Run', 'RunList', 'RunSteps', 'RunActions'],
+  tagTypes: ['Run', 'RunList', 'RunSteps', 'RunActions', 'Arrangement'],
   endpoints: (builder) => ({
     // GET /agent-runs — the caller's own runs, most recent first, paginated
     // (US6, FR-024/FR-025). The entry point for finding a run with no
@@ -73,6 +73,19 @@ export const runApi = createApi({
       query: ({ runId, actionId }) => `/agent-runs/${runId}/actions/${actionId}`,
       providesTags: (_result, _error, { actionId }) => [{ type: 'RunActions', id: actionId }],
     }),
+
+    // GET /agent-runs/{runId}/arrangement — the full shape of the
+    // multi-agent collaboration rooted at this run (106-multi-agent-run-view,
+    // US1, contracts/arrangement-api.md §1): entry-point run, every
+    // transitively-reachable delegation, and a RunSummary for every run
+    // referenced. One bounded, non-paginated fetch (research.md D5) — no
+    // page/per_page, unlike the step/action endpoints above. `Arrangement`
+    // tagged by runId — DelegationUpdated's future handler (T030) and
+    // RunUpdated's extended handler (T031) both invalidate/patch this tag.
+    getRunArrangement: builder.query<ArrangementResponse, string>({
+      query: (runId) => `/agent-runs/${runId}/arrangement`,
+      providesTags: (_result, _error, runId) => [{ type: 'Arrangement', id: runId }],
+    }),
   }),
 });
 
@@ -83,6 +96,7 @@ export const {
   useGetStepActionsQuery,
   useGetActionChildrenQuery,
   useGetActionDetailQuery,
+  useGetRunArrangementQuery,
   useLazyGetRunStepsQuery,
   useLazyGetStepActionsQuery,
   useLazyGetActionChildrenQuery,

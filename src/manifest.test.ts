@@ -200,6 +200,26 @@ describe('manifest — index.ts export/route consistency (SC-006)', () => {
   });
 });
 
+describe('manifest — 106-multi-agent-run-view arrangement route (US1, tasks.md T013)', () => {
+  it('registers the /clarion-app/llm-client/runs/:id/arrangement route, pointing at <RunArrangement />', () => {
+    const route = routes.find((r) => r.path === '/clarion-app/llm-client/runs/:id/arrangement');
+    expect(route, 'expected a route entry for /clarion-app/llm-client/runs/:id/arrangement').toBeTruthy();
+    expect(componentNameFromElement(route!.element)).toBe('RunArrangement');
+  });
+
+  it('the arrangement route element traces to a real exported component in index.ts', () => {
+    expect(exportedNames.has('RunArrangement')).toBe(true);
+    expect(exportedNameToModule.get('RunArrangement')).toBeTruthy();
+  });
+
+  it('no new API slice was added for the arrangement feature (research.md D7 — reuses llmClientRunApi)', () => {
+    // The arrangement endpoint is exposed as one more query on the
+    // already-registered runApi.ts slice, not a second slice — so no new
+    // entry belongs in customFields.clarion.api for this feature.
+    expect(apiList).toContain('llmClientRunApi');
+  });
+});
+
 describe('manifest — customFields.clarion.api (FR-003a)', () => {
   it('contains llmClientServerStatusApi', () => {
     expect(apiList).toContain('llmClientServerStatusApi');

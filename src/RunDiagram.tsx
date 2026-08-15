@@ -489,6 +489,16 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
         >
           {runStatusLabel(run)}
         </span>
+        {Array.isArray(delegations) && delegations.length > 0 && (
+          <button
+            type="button"
+            data-testid="run-diagram-arrangement-link"
+            onClick={() => navigate(`/clarion-app/llm-client/runs/${runId}/arrangement`)}
+            className="run-diagram__arrangement-link text-sm text-blue-700 underline"
+          >
+            View multi-agent arrangement
+          </button>
+        )}
       </div>
 
       {steps.length === 0 ? (

@@ -466,3 +466,32 @@ export interface Delegation {
    *  by every member of the same concurrent batch otherwise. */
   batch_id: string | null;
 }
+
+// Multi-agent arrangement types (106-multi-agent-run-view, data-model.md
+// §1.1, contracts/arrangement-api.md §1) -- the run-rooted, whole-tree
+// projection GET /agent-runs/{runId}/arrangement returns. A narrower
+// per-delegation shape than `Delegation` above (no task/context/
+// outcome_summary/result_* -- not needed for the shape-at-a-glance view,
+// data-model.md §1.1's own note).
+
+export interface ArrangementDelegation {
+  id: string;
+  parent_run_id: string | null;
+  parent_action_id: string | null;
+  helper_run_id: string | null;
+  helper_agent_id: string;
+  helper_agent_name: string | null;
+  depth: number;
+  status: DelegationStatus;
+  batch_id: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export interface ArrangementResponse {
+  root_run_id: string;
+  has_delegations: boolean;
+  truncated: boolean;
+  runs: Record<string, RunSummary>;
+  delegations: ArrangementDelegation[];
+}
