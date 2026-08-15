@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGetRunArrangementQuery } from './runApi';
 import type { ArrangementDelegation, ArrangementResponse, RunSummary } from './types';
@@ -113,6 +113,64 @@ function maxDuration(runs: Array<RunSummary | undefined>): number {
   return Math.max(1, ...runs.map((run) => run?.duration_ms ?? 0));
 }
 
+/**
+ * User Story 3 (research.md D8): a frontend-only tunable, not a backend
+ * contract field — below this total node count (root + every
+ * `helper_run_id`-bearing run, i.e. `Object.keys(data.runs).length`), the
+ * whole tree auto-expands on load; at or above it, every branch (any node
+ * with its own further delegations, including the root's own first tier)
+ * starts collapsed, so a large/deep arrangement loads as one entry-point row
+ * plus "Expand" affordances rather than a wall of detail (spec.md US3
+ * Acceptance Scenario 1).
+ */
+const AUTO_EXPAND_NODE_THRESHOLD = 15;
+
+function expandedStorageKey(rootRunId: string): string {
+  return `arrangement-expanded:${rootRunId}`;
+}
+
+interface DescendantFlags {
+  hasFailedDescendant: boolean;
+  hasInProgressDescendant: boolean;
+}
+
+/**
+ * Whether any run beneath `runId` (its delegated children, and their
+ * children, recursively — never `runId`'s own status) is `failed` or
+ * `in_progress` (FR-011 / spec.md US3 Acceptance Scenario 4). Computed once
+ * per render via the `memo` map threaded through the recursion, starting
+ * from the root, so a collapsed branch can surface the hint without a
+ * further fetch — the whole tree is already in hand (research.md D5/D8).
+ */
+function buildDescendantFlags(
+  runId: string,
+  delegationsByParentRunId: Record<string, ArrangementDelegation[]>,
+  runs: Record<string, RunSummary>,
+  memo: Map<string, DescendantFlags>,
+): DescendantFlags {
+  const cached = memo.get(runId);
+  if (cached) return cached;
+
+  let hasFailedDescendant = false;
+  let hasInProgressDescendant = false;
+
+  for (const delegation of delegationsByParentRunId[runId] ?? []) {
+    if (!delegation.helper_run_id) continue;
+
+    const childRun = runs[delegation.helper_run_id];
+    if (childRun?.end_state === 'failed') hasFailedDescendant = true;
+    if (childRun?.end_state === 'in_progress') hasInProgressDescendant = true;
+
+    const childFlags = buildDescendantFlags(delegation.helper_run_id, delegationsByParentRunId, runs, memo);
+    if (childFlags.hasFailedDescendant) hasFailedDescendant = true;
+    if (childFlags.hasInProgressDescendant) hasInProgressDescendant = true;
+  }
+
+  const result: DescendantFlags = { hasFailedDescendant, hasInProgressDescendant };
+  memo.set(runId, result);
+  return result;
+}
+
 interface DelegationNodeProps {
   delegation: ArrangementDelegation;
   overlap: boolean;
@@ -121,6 +179,10 @@ interface DelegationNodeProps {
   onOpenRun: (runId: string) => void;
   /** The largest duration_ms among this delegation's own siblings, for relative bar sizing (mirrors RunActionNode's maxDurationMs). */
   siblingMaxDurationMs: number;
+  /** User Story 3: ids of contributor runs whose own further delegations are currently shown. */
+  expandedIds: Set<string>;
+  onToggleExpand: (runId: string) => void;
+  descendantFlags: Map<string, DescendantFlags>;
 }
 
 /**
@@ -137,6 +199,9 @@ function DelegationNode({
   delegationsByParentRunId,
   onOpenRun,
   siblingMaxDurationMs,
+  expandedIds,
+  onToggleExpand,
+  descendantFlags,
 }: DelegationNodeProps): React.ReactElement {
   const neverStarted = delegation.helper_run_id === null;
   const helperRun = delegation.helper_run_id ? arrangement.runs[delegation.helper_run_id] : undefined;
@@ -187,6 +252,9 @@ function DelegationNode({
           onOpenRun={onOpenRun}
           isRoot={false}
           siblingMaxDurationMs={siblingMaxDurationMs}
+          expandedIds={expandedIds}
+          onToggleExpand={onToggleExpand}
+          descendantFlags={descendantFlags}
         />
       )}
     </div>
@@ -202,6 +270,10 @@ interface RunNodeProps {
   isRoot: boolean;
   /** The largest duration_ms among this node's own siblings, for relative bar sizing (mirrors RunActionNode's maxDurationMs). The root has no siblings, so it sizes against its own duration. */
   siblingMaxDurationMs: number;
+  /** User Story 3: ids of contributor runs whose own further delegations are currently shown. */
+  expandedIds: Set<string>;
+  onToggleExpand: (runId: string) => void;
+  descendantFlags: Map<string, DescendantFlags>;
 }
 
 /**
@@ -219,6 +291,9 @@ function RunNode({
   onOpenRun,
   isRoot,
   siblingMaxDurationMs,
+  expandedIds,
+  onToggleExpand,
+  descendantFlags,
 }: RunNodeProps): React.ReactElement {
   const children = delegationsByParentRunId[runId] ?? [];
   const overlappingIds = computeOverlappingDelegationIds(children);
@@ -226,6 +301,9 @@ function RunNode({
     children.map((d) => (d.helper_run_id ? arrangement.runs[d.helper_run_id] : undefined)),
   );
   const widthPct = run && run.duration_ms !== null ? Math.max(2, (run.duration_ms / siblingMaxDurationMs) * 100) : 0;
+  const isExpanded = expandedIds.has(runId);
+  const flags = descendantFlags.get(runId);
+  const showCollapsedHint = children.length > 0 && !isExpanded && flags && (flags.hasFailedDescendant || flags.hasInProgressDescendant);
 
   return (
     <div data-testid={`run-arrangement-node-${runId}`} className="run-arrangement-node">
@@ -258,6 +336,32 @@ function RunNode({
       )}
 
       {children.length > 0 && (
+        <div className="run-arrangement-node__branch-controls mt-1 flex items-center gap-2">
+          <button
+            type="button"
+            data-testid={`run-arrangement-toggle-${runId}`}
+            data-expanded={isExpanded ? 'true' : 'false'}
+            onClick={() => onToggleExpand(runId)}
+            className="text-xs font-medium text-blue-700 underline"
+          >
+            {isExpanded ? 'Collapse' : `Expand (${children.length})`}
+          </button>
+          {showCollapsedHint && (
+            <span
+              data-testid={`run-arrangement-collapsed-hint-${runId}`}
+              data-has-failed={flags?.hasFailedDescendant ? 'true' : 'false'}
+              data-has-in-progress={flags?.hasInProgressDescendant ? 'true' : 'false'}
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
+                flags?.hasFailedDescendant ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+              }`}
+            >
+              {flags?.hasFailedDescendant ? 'Contains a failed contributor' : 'Contains an in-progress contributor'}
+            </span>
+          )}
+        </div>
+      )}
+
+      {children.length > 0 && isExpanded && (
         <div className="run-arrangement-node__children ml-4 mt-1">
           {children.map((delegation) => (
             <DelegationNode
@@ -268,6 +372,9 @@ function RunNode({
               delegationsByParentRunId={delegationsByParentRunId}
               onOpenRun={onOpenRun}
               siblingMaxDurationMs={childSiblingMaxDuration}
+              expandedIds={expandedIds}
+              onToggleExpand={onToggleExpand}
+              descendantFlags={descendantFlags}
             />
           ))}
         </div>
@@ -286,6 +393,85 @@ export function RunArrangement({ runId: runIdProp }: RunArrangementProps = {}): 
   const runId = runIdProp ?? routeRunId ?? '';
 
   const { data, isLoading, isError, error } = useGetRunArrangementQuery(runId, { skip: runId === '' });
+
+  // User Story 3 (research.md D8/D8a): all of the following hooks must run
+  // on every render, unconditionally, before any early return below — they
+  // guard internally against `data` being undefined instead.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const initializedForRootRunId = useRef<string | null>(null);
+
+  const delegationsByParentRunId = useMemo<Record<string, ArrangementDelegation[]>>(() => {
+    const map: Record<string, ArrangementDelegation[]> = {};
+    if (!data) return map;
+    data.delegations.forEach((delegation) => {
+      if (!delegation.parent_run_id) return;
+      (map[delegation.parent_run_id] ??= []).push(delegation);
+    });
+    return map;
+  }, [data]);
+
+  const descendantFlags = useMemo(() => {
+    const memo = new Map<string, DescendantFlags>();
+    if (data) {
+      buildDescendantFlags(data.root_run_id, delegationsByParentRunId, data.runs, memo);
+    }
+    return memo;
+  }, [data, delegationsByParentRunId]);
+
+  // Read the persisted expand/collapse shape once per root_run_id (research.md
+  // D8a) — falling back to the D8 auto-expand-below-threshold default when
+  // nothing is stored (e.g. first visit to this arrangement this session).
+  useEffect(() => {
+    if (!data) return;
+    if (initializedForRootRunId.current === data.root_run_id) return;
+    initializedForRootRunId.current = data.root_run_id;
+
+    let stored: string[] | null = null;
+    try {
+      const raw = sessionStorage.getItem(expandedStorageKey(data.root_run_id));
+      if (raw) stored = JSON.parse(raw) as string[];
+    } catch {
+      stored = null;
+    }
+
+    if (stored) {
+      setExpandedIds(new Set(stored));
+      return;
+    }
+
+    const nodeCount = Object.keys(data.runs).length;
+    if (nodeCount <= AUTO_EXPAND_NODE_THRESHOLD) {
+      setExpandedIds(new Set(Object.keys(delegationsByParentRunId)));
+    } else {
+      setExpandedIds(new Set());
+    }
+  }, [data, delegationsByParentRunId]);
+
+  // Persist on every toggle (research.md D8a). Runs alongside the
+  // initialization effect above too (harmless — it just re-writes the same
+  // value the read above just produced).
+  useEffect(() => {
+    if (!data) return;
+    try {
+      sessionStorage.setItem(expandedStorageKey(data.root_run_id), JSON.stringify(Array.from(expandedIds)));
+    } catch {
+      // sessionStorage unavailable (e.g. private-browsing quota) -- the
+      // expand/collapse state itself still works for this render, it just
+      // won't survive a navigation away and back. Best-effort only.
+    }
+  }, [data, expandedIds]);
+
+  const handleToggleExpand = (targetRunId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(targetRunId)) {
+        next.delete(targetRunId);
+      } else {
+        next.add(targetRunId);
+      }
+      return next;
+    });
+  };
 
   const handleOpenRun = (targetRunId: string) => {
     navigate(`/clarion-app/llm-client/runs/${targetRunId}`);
@@ -317,12 +503,6 @@ export function RunArrangement({ runId: runIdProp }: RunArrangementProps = {}): 
     return <div data-testid="run-arrangement">Loading…</div>;
   }
 
-  const delegationsByParentRunId: Record<string, ArrangementDelegation[]> = {};
-  data.delegations.forEach((delegation) => {
-    if (!delegation.parent_run_id) return;
-    (delegationsByParentRunId[delegation.parent_run_id] ??= []).push(delegation);
-  });
-
   const rootRun = data.runs[data.root_run_id];
 
   return (
@@ -352,6 +532,9 @@ export function RunArrangement({ runId: runIdProp }: RunArrangementProps = {}): 
           onOpenRun={handleOpenRun}
           isRoot
           siblingMaxDurationMs={maxDuration([rootRun])}
+          expandedIds={expandedIds}
+          onToggleExpand={handleToggleExpand}
+          descendantFlags={descendantFlags}
         />
       )}
     </div>
