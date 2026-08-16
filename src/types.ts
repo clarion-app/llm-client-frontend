@@ -495,3 +495,18 @@ export interface ArrangementResponse {
   runs: Record<string, RunSummary>;
   delegations: ArrangementDelegation[];
 }
+
+// Capability offering types (109-agent-as-capability, data-model.md §10,
+// contracts/capability-offering-api.md)
+export interface CapabilityOffering {
+  id: string;
+  offered_agent_id: string;
+  offered_agent_name: string;
+  caller_agent_id: string;
+  caller_agent_name: string;
+  capability_name: string;
+  capability_description: string;
+  input_description: string;
+  created_at: string;
+  updated_at: string;
+}

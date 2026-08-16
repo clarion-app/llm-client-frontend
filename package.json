@@ -55,7 +55,8 @@
                 "llmClientAgentBrowserApi",
                 "llmClientAgentShareApi",
                 "llmClientAgentHelperApi",
-                "llmClientDelegationApi"
+                "llmClientDelegationApi",
+                "llmClientCapabilityOfferingApi"
             ],
             "routes": [
                 {

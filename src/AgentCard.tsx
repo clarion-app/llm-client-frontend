@@ -2,6 +2,7 @@ import React from 'react';
 import type { AgentSearchEntry, AgentUsageSummary } from './types';
 import { ManageSharingPanel } from './ManageSharingPanel';
 import { ManageHelpersPanel } from './ManageHelpersPanel';
+import { ManageCapabilityOfferingsPanel } from './ManageCapabilityOfferingsPanel';
 
 /**
  * AgentCard — the per-agent presentational summary card (095-agent-summary-
@@ -89,6 +90,7 @@ export function AgentCard({ agent }: { agent: AgentSearchEntry }): React.ReactEl
 
       {agent.permission === 'owner' && <ManageSharingPanel agentId={agent.id} />}
       {agent.permission === 'owner' && <ManageHelpersPanel agentId={agent.id} />}
+      {agent.permission === 'owner' && <ManageCapabilityOfferingsPanel agentId={agent.id} />}
 
       {agent.purpose ? (
         <div

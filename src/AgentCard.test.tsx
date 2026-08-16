@@ -34,6 +34,20 @@ vi.mock('./ManageHelpersPanel', () => ({
 }));
 
 /**
+ * 109-agent-as-capability, contracts/capability-offering-api.md — mocked
+ * for the identical reason `./ManageSharingPanel`/`./ManageHelpersPanel`
+ * are mocked above: `ManageCapabilityOfferingsPanel` calls RTK Query hooks
+ * of its own (`useListOfferingsQuery`/`useSearchAgentsQuery`/etc.), which
+ * throw outside a real `<Provider>` — this file renders `AgentCard` with no
+ * store, since it is a unit test of `AgentCard`'s own orchestration, not of
+ * `ManageCapabilityOfferingsPanel`'s internals.
+ */
+vi.mock('./ManageCapabilityOfferingsPanel', () => ({
+  ManageCapabilityOfferingsPanel: () =>
+    React.createElement('div', { 'data-testid': 'manage-capability-offerings-panel-mock' }, 'Mock Manage Capability Offerings Panel'),
+}));
+
+/**
  * Phase 3 (US1 + US2, 095-agent-summary-cards), contracts/
  * frontend-agent-cards.md §3-§4, data-model.md §8 — the new presentational
  * `AgentCard` component this feature adds, replacing `AgentBrowser.tsx`'s
@@ -484,5 +498,30 @@ describe('AgentCard — 097-subagent-model US1: owner-only helpers panel', () =>
     render(<AgentCard agent={agent as any} />);
 
     expect(screen.queryByTestId('manage-helpers-panel-mock')).not.toBeInTheDocument();
+  });
+});
+
+// =====================================================================
+// T051 (109-agent-as-capability), contracts/capability-offering-api.md —
+// the owner-only ManageCapabilityOfferingsPanel slot this feature adds to
+// AgentCard, mirroring the ManageSharingPanel/ManageHelpersPanel gate
+// tests above exactly.
+// =====================================================================
+
+describe('AgentCard — 109-agent-as-capability US-shared: owner-only capability offerings panel', () => {
+  it('renders ManageCapabilityOfferingsPanel when permission is owner', () => {
+    const agent = makeSharedAgent({ permission: 'owner' });
+
+    render(<AgentCard agent={agent as any} />);
+
+    expect(screen.getByTestId('manage-capability-offerings-panel-mock')).toBeInTheDocument();
+  });
+
+  it.each(['use', 'use_and_edit'] as const)('renders no ManageCapabilityOfferingsPanel when permission is %s', (permission) => {
+    const agent = makeSharedAgent({ permission });
+
+    render(<AgentCard agent={agent as any} />);
+
+    expect(screen.queryByTestId('manage-capability-offerings-panel-mock')).not.toBeInTheDocument();
   });
 });
