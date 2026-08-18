@@ -140,6 +140,18 @@ export const mcpClientServerApi = createApi({
       }),
       invalidatesTags: (_result, _error, { id }) => [{ type: 'McpClientServer' as const, id }],
     }),
+    // US4 (D8): a plain soft-delete -- production-code-correct already
+    // (SoftDeletingScope excludes a deleted server's tools everywhere),
+    // this endpoint's only job is to remove the server from the caller's
+    // own list, so invalidating the LIST tag is enough to make it
+    // disappear without a manual refresh.
+    deleteMcpClientServer: builder.mutation<void, string>({
+      query: (id) => ({
+        url: `/mcp-client-server/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: [{ type: 'McpClientServer' as const, id: 'LIST' }],
+    }),
   }),
 });
 
@@ -150,4 +162,5 @@ export const {
   useTestMcpClientConnectionMutation,
   useGetMcpClientConnectionTestQuery,
   useReplaceMcpClientServerCredentialMutation,
+  useDeleteMcpClientServerMutation,
 } = mcpClientServerApi;

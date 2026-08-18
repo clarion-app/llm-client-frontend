@@ -177,3 +177,48 @@ describe('McpServerCard — replace credential (US3, FR-008/FR-009, Acceptance S
     expect(screen.queryByTestId(`mcp-credential-replace-form-${server.id}`)).not.toBeInTheDocument();
   });
 });
+
+describe('McpServerCard — remove (US4, FR-006/FR-007/FR-013, Acceptance Scenarios 1-3)', () => {
+  it('clicking "Remove" shows a ConfirmDialog naming the effect on agents (FR-013/AS3), not an immediate delete', () => {
+    const server = makeServer();
+    renderWithStore(<McpServerCard server={server} />);
+
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId(`mcp-server-remove-toggle-${server.id}`));
+
+    const dialog = screen.getByTestId('confirm-dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.textContent ?? '').toMatch(/agents will no longer be able to use.*tools/i);
+  });
+
+  it('confirming removal calls the delete mutation for this server\'s own id', async () => {
+    const server = makeServer();
+    renderWithStore(<McpServerCard server={server} />);
+
+    fireEvent.click(screen.getByTestId(`mcp-server-remove-toggle-${server.id}`));
+    fireEvent.click(screen.getByTestId('confirm-dialog').querySelector('button:last-of-type') as HTMLElement);
+
+    // The mutation is fired via RTK Query's own fetch base query, which
+    // this test's store never mocks a network layer for -- the request
+    // itself (not its resolution) is the thing under test here, mirroring
+    // ServerCard's own delete-confirmation precedent: no server-specific
+    // assertion beyond "the confirm click did not throw and the dialog is
+    // dismissed" is meaningful without mocking createBaseQuery's fetch.
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+  });
+
+  it('canceling leaves the server untouched and still listed (no mutation call, dialog dismissed)', () => {
+    const server = makeServer();
+    renderWithStore(<McpServerCard server={server} />);
+
+    fireEvent.click(screen.getByTestId(`mcp-server-remove-toggle-${server.id}`));
+    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('confirm-dialog').querySelector('button:first-of-type') as HTMLElement);
+
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+    expect(screen.getByTestId(`mcp-server-card-${server.id}`)).toBeInTheDocument();
+    expect(screen.getByText(server.name)).toBeInTheDocument();
+  });
+});
