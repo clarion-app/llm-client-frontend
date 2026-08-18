@@ -510,3 +510,32 @@ export interface CapabilityOffering {
   created_at: string;
   updated_at: string;
 }
+
+// MCP client server management types (119-mcp-server-management-ui,
+// data-model.md's decision table). connection_status's five values —
+// 'unknown' is a server with no status row yet (never refreshed);
+// 'protocol_error' is distinct from 'unreachable' (FR-010) — the classifier
+// this feature adds is what makes that distinction possible at all.
+export type McpClientServerStatusCategory = 'unknown' | 'reachable' | 'unreachable' | 'auth_failed' | 'protocol_error';
+
+export type McpClientServerTransport = 'streamable_http' | 'stdio';
+
+export type McpClientServerScope = 'personal' | 'project';
+
+export interface McpClientServerType {
+  id: string;
+  name: string;
+  transport: McpClientServerTransport;
+  scope: McpClientServerScope;
+  connection_status: McpClientServerStatusCategory;
+  last_reachable_at: string | null;
+  tool_count: number;
+}
+
+export interface McpClientServerStatusType {
+  connection_status: McpClientServerStatusCategory;
+  last_error: string | null;
+  tool_count: number;
+  refresh_finished_at: string | null;
+  last_reachable_at: string | null;
+}
