@@ -31,6 +31,21 @@ export interface McpTestConnectionStartedType {
 }
 
 /**
+ * replaceCredential()'s 200 response shape (contracts/credential-replace-
+ * api.md) -- McpClientServerController::serverSummary()'s plain 4-field
+ * shape, deliberately not McpCreateServerResponseType (no `status` field
+ * at all; this endpoint's response is the older, unaugmented shape
+ * index()'s status fields were never folded into, per D7/T045's own
+ * choice to leave serverSummary() unchanged).
+ */
+export interface McpServerSummaryType {
+  id: string;
+  name: string;
+  transport: McpClientServerType['transport'];
+  scope: McpClientServerType['scope'];
+}
+
+/**
  * show()'s response shape (McpClientServerController::serverDetail()) —
  * distinct from index()'s flat McpClientServerType: status is nested and
  * cached tools are included. Not yet rendered by any US1 component (the
@@ -109,6 +124,22 @@ export const mcpClientServerApi = createApi({
     getMcpClientConnectionTest: builder.query<McpConnectionTestType, string>({
       query: (id) => `/mcp-client-server/test-connection/${id}`,
     }),
+    // US3 (D7): a narrow, single-field replace -- the request body is
+    // exactly { credential }, never any other server field, mirroring
+    // the backend endpoint's own structural guarantee (contracts/
+    // credential-replace-api.md). Invalidates only this one server's own
+    // tag, which getMcpClientServers' own providesTags already includes
+    // per server, so the affected card reflects the transition (e.g.
+    // auth_failed -> reachable once the dispatched refresh job runs)
+    // without a manual page refresh.
+    replaceMcpClientServerCredential: builder.mutation<McpServerSummaryType, { id: string; credential: string }>({
+      query: ({ id, credential }) => ({
+        url: `/mcp-client-server/${id}/credential`,
+        method: 'PATCH',
+        body: { credential },
+      }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'McpClientServer' as const, id }],
+    }),
   }),
 });
 
@@ -118,4 +149,5 @@ export const {
   useCreateMcpClientServerMutation,
   useTestMcpClientConnectionMutation,
   useGetMcpClientConnectionTestQuery,
+  useReplaceMcpClientServerCredentialMutation,
 } = mcpClientServerApi;

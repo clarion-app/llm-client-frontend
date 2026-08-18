@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { McpClientServerStatusCategory, McpClientServerType } from './types';
+import { McpCredentialReplaceForm } from './McpCredentialReplaceForm';
 
 interface McpServerCardProps {
   server: McpClientServerType;
@@ -57,6 +58,14 @@ const TRANSPORT_LABELS: Record<McpClientServerType['transport'], string> = {
 export function McpServerCard({ server }: McpServerCardProps): React.ReactElement {
   const statusLabel = STATUS_LABELS[server.connection_status] ?? STATUS_LABELS.unknown;
   const statusColor = STATUS_COLORS[server.connection_status] ?? STATUS_COLORS.unknown;
+  const [showReplaceCredential, setShowReplaceCredential] = useState(false);
+
+  const handleReplaceSuccess = useCallback(() => {
+    // replaceMcpClientServerCredential's own invalidatesTags already
+    // refreshes this card's status (e.g. auth_failed -> reachable once
+    // the dispatched refresh job runs) -- this only collapses the form.
+    setShowReplaceCredential(false);
+  }, []);
 
   return (
     <div
@@ -98,6 +107,31 @@ export function McpServerCard({ server }: McpServerCardProps): React.ReactElemen
         <span data-testid={`mcp-server-tool-count-${server.id}`}>
           {server.tool_count} {server.tool_count === 1 ? 'tool' : 'tools'} offered
         </span>
+      </div>
+
+      <div style={{ marginTop: '0.75rem' }}>
+        <button
+          type="button"
+          data-testid={`mcp-server-replace-credential-toggle-${server.id}`}
+          onClick={() => setShowReplaceCredential((prev) => !prev)}
+          style={{
+            padding: '0.375rem 0.75rem',
+            border: '1px solid var(--border-color, #d1d5db)',
+            borderRadius: '0.375rem',
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            cursor: 'pointer',
+            fontSize: '0.8125rem',
+            fontWeight: 500,
+          }}
+        >
+          {showReplaceCredential ? 'Cancel' : 'Replace credential'}
+        </button>
+
+        {showReplaceCredential && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <McpCredentialReplaceForm serverId={server.id} onSuccess={handleReplaceSuccess} />
+          </div>
+        )}
       </div>
     </div>
   );
