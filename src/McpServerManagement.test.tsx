@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 
@@ -40,6 +40,12 @@ vi.mock('@clarion-app/frontend-base', () => ({
     updateFrontend: () => {},
   }),
   createBaseQuery: () => async (args: any) => {
+    if (typeof args === 'object' && args.method === 'POST' && args.url === '/mcp-client-server') {
+      const created = { id: 'srv-new', name: args.body.name, transport: args.body.transport, scope: args.body.scope, connection_status: 'unknown', last_reachable_at: null, tool_count: 0 };
+      mockServers = [...mockServers, created];
+      return { data: { id: created.id, name: created.name, transport: created.transport, scope: created.scope, status: 'pending' } };
+    }
+
     const url = typeof args === 'string' ? args : (args?.url ?? '');
     if (String(url).includes('/mcp-client-server')) {
       return { data: mockServers };
@@ -108,5 +114,47 @@ describe('McpServerManagement — orchestration', () => {
     // copy (Grounding note 9 — that component's text does not apply here).
     expect(emptyState.textContent ?? '').toMatch(/server/i);
     expect(emptyState.textContent ?? '').not.toMatch(/OpenAI-compatible/i);
+  });
+});
+
+describe('McpServerManagement — add flow (US2)', () => {
+  beforeEach(() => {
+    mockServers = [];
+  });
+
+  it('shows an "Add server" toggle that reveals AddMcpServerForm', async () => {
+    renderManagement();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-server-management-empty-state')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('add-mcp-server-form')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('mcp-server-add-toggle'));
+
+    expect(screen.getByTestId('add-mcp-server-form')).toBeInTheDocument();
+  });
+
+  it('a newly-saved server appears in the list without a page reload (Acceptance Scenario 3)', async () => {
+    renderManagement();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-server-management-empty-state')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('mcp-server-add-toggle'));
+    fireEvent.change(screen.getByLabelText(/name/i), { target: { value: 'Freshly added server' } });
+    fireEvent.change(screen.getByLabelText(/url/i), { target: { value: 'https://mcp.example.com/mcp' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-server-list')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('mcp-server-list-item-srv-new')).toHaveTextContent('Freshly added server');
+    // The form collapses back down once the save succeeds.
+    expect(screen.queryByTestId('add-mcp-server-form')).not.toBeInTheDocument();
   });
 });

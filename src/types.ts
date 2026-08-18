@@ -539,3 +539,36 @@ export interface McpClientServerStatusType {
   refresh_finished_at: string | null;
   last_reachable_at: string | null;
 }
+
+// contracts/connection-test-api.md's own response shapes — the three
+// failure_category values are exactly McpClientConnectionOutcomeClassifier's
+// three failure categories (D5), the same vocabulary
+// McpClientServerStatusCategory already carries minus 'reachable'/'unknown',
+// which a test result never reports.
+export type McpConnectionTestStatus = 'pending' | 'passed' | 'failed';
+
+export type McpConnectionTestFailureCategory = 'unreachable' | 'auth_failed' | 'protocol_error';
+
+export interface McpConnectionTestType {
+  id: string;
+  status: McpConnectionTestStatus;
+  failure_category: McpConnectionTestFailureCategory | null;
+  message: string | null;
+  tool_count: number | null;
+}
+
+// The connection-shape fields shared by store() and testConnection() —
+// testConnection() accepts exactly these (no name/scope, per
+// contracts/connection-test-api.md); store() accepts these plus name/scope.
+export interface McpServerConnectionFields {
+  transport: McpClientServerTransport;
+  url?: string | null;
+  command?: string | null;
+  args?: string[] | null;
+  credential?: string | null;
+}
+
+export interface McpCreateServerRequest extends McpServerConnectionFields {
+  name: string;
+  scope: McpClientServerScope;
+}

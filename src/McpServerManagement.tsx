@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { useGetMcpClientServersQuery } from './mcpClientServerApi';
 import { McpServerList } from './McpServerList';
+import { AddMcpServerForm } from './AddMcpServerForm';
 
 /**
  * McpServerManagement — routed screen for the MCP (external tool) server
@@ -20,6 +21,15 @@ import { McpServerList } from './McpServerList';
  */
 export function McpServerManagement(): React.ReactElement {
   const { data: servers = [], isLoading } = useGetMcpClientServersQuery();
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  const handleAddSuccess = useCallback(() => {
+    // getMcpClientServers is already invalidated by createMcpClientServer's
+    // own invalidatesTags -- the newly-saved server appears in the list
+    // below without a page reload or any further action (US2 Acceptance
+    // Scenario 3); this only collapses the form back down.
+    setShowAddForm(false);
+  }, []);
 
   if (isLoading) {
     return (
@@ -31,7 +41,14 @@ export function McpServerManagement(): React.ReactElement {
 
   return (
     <div className="mcp-server-management" data-testid="mcp-server-management">
-      <h1 style={{ margin: '0 0 1.5rem', fontSize: '1.5rem', fontWeight: 700 }}>MCP Servers</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>MCP Servers</h1>
+        <button type="button" data-testid="mcp-server-add-toggle" onClick={() => setShowAddForm((prev) => !prev)}>
+          {showAddForm ? 'Cancel' : 'Add server'}
+        </button>
+      </div>
+
+      {showAddForm && <AddMcpServerForm onSuccess={handleAddSuccess} />}
 
       {servers.length === 0 ? (
         <div
