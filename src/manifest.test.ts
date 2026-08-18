@@ -220,6 +220,19 @@ describe('manifest — 106-multi-agent-run-view arrangement route (US1, tasks.md
   });
 });
 
+describe('manifest — 119-mcp-server-management-ui MCP server management route (US1, tasks.md T023)', () => {
+  it('registers the /clarion-app/llm-client/mcp-servers route, pointing at <McpServerManagement />', () => {
+    const route = routes.find((r) => r.path === '/clarion-app/llm-client/mcp-servers');
+    expect(route, 'expected a route entry for /clarion-app/llm-client/mcp-servers').toBeTruthy();
+    expect(componentNameFromElement(route!.element)).toBe('McpServerManagement');
+  });
+
+  it('the mcp-servers route element traces to a real exported component in index.ts', () => {
+    expect(exportedNames.has('McpServerManagement')).toBe(true);
+    expect(exportedNameToModule.get('McpServerManagement')).toBeTruthy();
+  });
+});
+
 describe('manifest — customFields.clarion.api (FR-003a)', () => {
   it('contains llmClientServerStatusApi', () => {
     expect(apiList).toContain('llmClientServerStatusApi');
@@ -283,6 +296,21 @@ describe('manifest — customFields.clarion.api (FR-003a)', () => {
    */
   it('contains llmClientCapabilityOfferingApi', () => {
     expect(apiList).toContain('llmClientCapabilityOfferingApi');
+  });
+
+  /**
+   * 119-mcp-server-management-ui, contracts/frontend-manifest-wiring.md —
+   * the one `package.json` entry this feature's new
+   * `mcpClientServerApi.ts` slice cannot skip, per 070-run-execution-
+   * graph's own reconciliation lesson (`llmClientRunApi` shipped exported
+   * but unlisted here, so its reducer/middleware were never registered in
+   * the host's generated store despite every package-scoped test
+   * passing). Intentionally redundant with the generic "lists every *Api
+   * module exported from index.ts" rule below, documenting which feature
+   * introduced the requirement.
+   */
+  it('contains llmClientMcpClientServerApi', () => {
+    expect(apiList).toContain('llmClientMcpClientServerApi');
   });
 
   /**

@@ -510,3 +510,65 @@ export interface CapabilityOffering {
   created_at: string;
   updated_at: string;
 }
+
+// MCP client server management types (119-mcp-server-management-ui,
+// data-model.md's decision table). connection_status's five values —
+// 'unknown' is a server with no status row yet (never refreshed);
+// 'protocol_error' is distinct from 'unreachable' (FR-010) — the classifier
+// this feature adds is what makes that distinction possible at all.
+export type McpClientServerStatusCategory = 'unknown' | 'reachable' | 'unreachable' | 'auth_failed' | 'protocol_error';
+
+export type McpClientServerTransport = 'streamable_http' | 'stdio';
+
+export type McpClientServerScope = 'personal' | 'project';
+
+export interface McpClientServerType {
+  id: string;
+  name: string;
+  transport: McpClientServerTransport;
+  scope: McpClientServerScope;
+  connection_status: McpClientServerStatusCategory;
+  last_reachable_at: string | null;
+  tool_count: number;
+}
+
+export interface McpClientServerStatusType {
+  connection_status: McpClientServerStatusCategory;
+  last_error: string | null;
+  tool_count: number;
+  refresh_finished_at: string | null;
+  last_reachable_at: string | null;
+}
+
+// contracts/connection-test-api.md's own response shapes — the three
+// failure_category values are exactly McpClientConnectionOutcomeClassifier's
+// three failure categories (D5), the same vocabulary
+// McpClientServerStatusCategory already carries minus 'reachable'/'unknown',
+// which a test result never reports.
+export type McpConnectionTestStatus = 'pending' | 'passed' | 'failed';
+
+export type McpConnectionTestFailureCategory = 'unreachable' | 'auth_failed' | 'protocol_error';
+
+export interface McpConnectionTestType {
+  id: string;
+  status: McpConnectionTestStatus;
+  failure_category: McpConnectionTestFailureCategory | null;
+  message: string | null;
+  tool_count: number | null;
+}
+
+// The connection-shape fields shared by store() and testConnection() —
+// testConnection() accepts exactly these (no name/scope, per
+// contracts/connection-test-api.md); store() accepts these plus name/scope.
+export interface McpServerConnectionFields {
+  transport: McpClientServerTransport;
+  url?: string | null;
+  command?: string | null;
+  args?: string[] | null;
+  credential?: string | null;
+}
+
+export interface McpCreateServerRequest extends McpServerConnectionFields {
+  name: string;
+  scope: McpClientServerScope;
+}
