@@ -27,10 +27,12 @@ import { capabilityOfferingApi as llmClientCapabilityOfferingApi } from "./capab
 import { ManageCapabilityOfferingsPanel } from "./ManageCapabilityOfferingsPanel";
 import { mcpClientServerApi as llmClientMcpClientServerApi } from "./mcpClientServerApi";
 import { McpServerManagement } from "./McpServerManagement";
+import { workspaceApi as llmClientWorkspaceApi } from "./workspaceApi";
+import { WorkspaceBrowser } from "./WorkspaceBrowser";
 
 export { backend, updateFrontend } from './config';
 
-export { llmClientConversationApi, llmClientServerApi, llmClientModelApi, llmClientMessageApi, llmClientRoleAssignmentApi, llmClientServerStatusApi, llmClientRunApi, llmClientEvalDashboardApi, llmClientAgentBrowserApi, llmClientAgentShareApi, llmClientAgentHelperApi, llmClientDelegationApi, llmClientCapabilityOfferingApi, llmClientMcpClientServerApi, useConfirmApiCallMutation, ApiCallConfirmation, Conversation, Conversations, ModelSetup, ModelSetupRedirect, RunDiagram, RunsList, RunArrangement, EvalDashboard, EvalRunBreakdown, EvalCaseDetail, AgentBrowser, ManageCapabilityOfferingsPanel, McpServerManagement };
+export { llmClientConversationApi, llmClientServerApi, llmClientModelApi, llmClientMessageApi, llmClientRoleAssignmentApi, llmClientServerStatusApi, llmClientRunApi, llmClientEvalDashboardApi, llmClientAgentBrowserApi, llmClientAgentShareApi, llmClientAgentHelperApi, llmClientDelegationApi, llmClientCapabilityOfferingApi, llmClientMcpClientServerApi, llmClientWorkspaceApi, useConfirmApiCallMutation, ApiCallConfirmation, Conversation, Conversations, ModelSetup, ModelSetupRedirect, RunDiagram, RunsList, RunArrangement, EvalDashboard, EvalRunBreakdown, EvalCaseDetail, AgentBrowser, ManageCapabilityOfferingsPanel, McpServerManagement, WorkspaceBrowser };
 
 // Side-effect import: registers handler for ServerModelsRefreshed broadcasts
 import './serverStatusRealtime';

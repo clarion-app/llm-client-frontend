@@ -511,6 +511,35 @@ export interface CapabilityOffering {
   updated_at: string;
 }
 
+// Workspace browser types (122-workspace-browser-ui, US1, contracts/
+// workspace-list-api.md). `reachable` is computed fresh by the backend on
+// every GET -- never a cached/stored value (FR-002, research.md D3).
+export interface CodingWorkspaceType {
+  id: string;
+  user_id: string;
+  name: string;
+  root_path: string;
+  test_command: string | null;
+  confirmation_relaxed: boolean;
+  reachable: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * The flat `{data, total, page, per_page}` envelope T006 settled on for
+ * this feature's list endpoints -- deliberately NOT `PaginatedEnvelope<T>`'s
+ * nested `.meta.total` shape (Grounding note 6), since neither
+ * `CodingProjectController::index()` nor `CodingWorkspaceController::
+ * changes()` build on `RunController`'s own envelope helper.
+ */
+export interface FlatPaginatedEnvelope<T> {
+  data: T[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 // MCP client server management types (119-mcp-server-management-ui,
 // data-model.md's decision table). connection_status's five values —
 // 'unknown' is a server with no status row yet (never refreshed);

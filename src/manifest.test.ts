@@ -233,6 +233,23 @@ describe('manifest — 119-mcp-server-management-ui MCP server management route 
   });
 });
 
+describe('manifest — 122-workspace-browser-ui workspace browser route (US1, tasks.md T017)', () => {
+  it('registers the /clarion-app/llm-client/workspaces route, pointing at <WorkspaceBrowser />', () => {
+    const route = routes.find((r) => r.path === '/clarion-app/llm-client/workspaces');
+    expect(route, 'expected a route entry for /clarion-app/llm-client/workspaces').toBeTruthy();
+    expect(componentNameFromElement(route!.element)).toBe('WorkspaceBrowser');
+  });
+
+  it('the workspaces route element traces to a real exported component in index.ts', () => {
+    expect(exportedNames.has('WorkspaceBrowser')).toBe(true);
+    expect(exportedNameToModule.get('WorkspaceBrowser')).toBeTruthy();
+  });
+
+  it('contains llmClientWorkspaceApi', () => {
+    expect(apiList).toContain('llmClientWorkspaceApi');
+  });
+});
+
 describe('manifest — customFields.clarion.api (FR-003a)', () => {
   it('contains llmClientServerStatusApi', () => {
     expect(apiList).toContain('llmClientServerStatusApi');
