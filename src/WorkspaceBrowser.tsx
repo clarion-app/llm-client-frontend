@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useGetCodingProjectsQuery, useUpdateWorkspaceConfirmationSettingMutation, useDeleteCodingProjectMutation } from './workspaceApi';
 import { CodingWorkspaceType } from './types';
 import { AddWorkspaceForm } from './AddWorkspaceForm';
@@ -185,7 +186,14 @@ function WorkspaceRow({ workspace }: WorkspaceRowProps): React.ReactElement {
           {workspace.confirmation_relaxed ? 'Confirmation relaxed' : 'Confirmation required'}
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <Link
+            to={`/clarion-app/llm-client/workspaces/${workspace.id}/changes`}
+            data-testid={`workspace-change-history-link-${workspace.id}`}
+            style={{ fontSize: '0.8125rem' }}
+          >
+            View change history
+          </Link>
           <button type="button" data-testid={`workspace-confirmation-toggle-${workspace.id}`} onClick={handleToggleConfirmation}>
             {workspace.confirmation_relaxed ? 'Require confirmation' : 'Relax confirmation'}
           </button>

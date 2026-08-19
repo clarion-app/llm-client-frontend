@@ -250,6 +250,27 @@ describe('manifest — 122-workspace-browser-ui workspace browser route (US1, ta
   });
 });
 
+describe('manifest — 122-workspace-browser-ui change history route (US3, tasks.md T054)', () => {
+  it('registers the /clarion-app/llm-client/workspaces/:id/changes route, pointing at <WorkspaceChangeHistory />', () => {
+    const route = routes.find((r) => r.path === '/clarion-app/llm-client/workspaces/:id/changes');
+    expect(route, 'expected a route entry for /clarion-app/llm-client/workspaces/:id/changes').toBeTruthy();
+    expect(componentNameFromElement(route!.element)).toBe('WorkspaceChangeHistory');
+  });
+
+  it('the change history route element traces to a real exported component in index.ts', () => {
+    expect(exportedNames.has('WorkspaceChangeHistory')).toBe(true);
+    expect(exportedNameToModule.get('WorkspaceChangeHistory')).toBeTruthy();
+  });
+
+  it('has no menu entry of its own -- reached only by navigating from a WorkspaceBrowser row, mirroring RunDiagram/RunsList', () => {
+    expect(menuEntries.some((e) => e.path === '/clarion-app/llm-client/workspaces/:id/changes')).toBe(false);
+  });
+
+  // The api-list block for llmClientWorkspaceApi is already covered above
+  // (T017) -- one slice serves both WorkspaceBrowser and
+  // WorkspaceChangeHistory, nothing new to list here.
+});
+
 describe('manifest — customFields.clarion.api (FR-003a)', () => {
   it('contains llmClientServerStatusApi', () => {
     expect(apiList).toContain('llmClientServerStatusApi');

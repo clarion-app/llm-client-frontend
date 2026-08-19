@@ -124,6 +124,10 @@
                 {
                     "path": "/clarion-app/llm-client/workspaces",
                     "element": "<WorkspaceBrowser />"
+                },
+                {
+                    "path": "/clarion-app/llm-client/workspaces/:id/changes",
+                    "element": "<WorkspaceChangeHistory />"
                 }
             ],
             "menu": {

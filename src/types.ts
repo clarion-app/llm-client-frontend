@@ -540,6 +540,37 @@ export interface FlatPaginatedEnvelope<T> {
   per_page: number;
 }
 
+/**
+ * Workspace change history types (122-workspace-browser-ui, US3, contracts/
+ * workspace-change-history-api.md). One row is one recorded change an agent
+ * made to one file -- `created`/`modified`/`deleted` -- captured at the
+ * moment of mutation. `agent_id`/`agent_name`/`conversation_id` are all
+ * `null` together when the underlying write/delete call carried no
+ * verifiable attribution header (a valid, expected shape, not an error).
+ * For each side (`old`/`new`) independently, at most one of `_binary`/
+ * `_content_truncated` is ever true, and when `_binary` is true `_content`
+ * is `null`.
+ */
+export type CodingWorkspaceChangeOperation = 'created' | 'modified' | 'deleted';
+
+export interface CodingWorkspaceChangeType {
+  id: string;
+  path: string;
+  operation: CodingWorkspaceChangeOperation;
+  old_content: string | null;
+  old_content_truncated: boolean;
+  old_binary: boolean;
+  old_size: number | null;
+  new_content: string | null;
+  new_content_truncated: boolean;
+  new_binary: boolean;
+  new_size: number | null;
+  agent_id: string | null;
+  agent_name: string | null;
+  conversation_id: string | null;
+  created_at: string;
+}
+
 // MCP client server management types (119-mcp-server-management-ui,
 // data-model.md's decision table). connection_status's five values —
 // 'unknown' is a server with no status row yet (never refreshed);

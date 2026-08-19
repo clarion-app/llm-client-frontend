@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
+import { MemoryRouter } from 'react-router-dom';
 
 /**
  * WorkspaceBrowser — US1 (122-workspace-browser-ui, contracts/
@@ -108,9 +109,11 @@ function createTestStore() {
 function renderBrowser() {
   const store = createTestStore();
   return render(
-    <Provider store={store}>
-      <WorkspaceBrowser />
-    </Provider>,
+    <MemoryRouter>
+      <Provider store={store}>
+        <WorkspaceBrowser />
+      </Provider>
+    </MemoryRouter>,
   );
 }
 
@@ -186,6 +189,20 @@ describe('WorkspaceBrowser — listing workspaces (Acceptance Scenarios 1-2)', (
     // healthy row does not.
     expect(screen.getByTestId('workspace-row-ws-broken').getAttribute('data-reachable')).toBe('false');
     expect(screen.getByTestId('workspace-row-ws-healthy').getAttribute('data-reachable')).toBe('true');
+  });
+
+  it('links each row to its own change history route (US3, contracts/frontend-manifest-wiring.md)', async () => {
+    mockWorkspaces = [makeWorkspace({ id: 'ws-history', root_path: '/srv/projects/history' })];
+
+    renderBrowser();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workspace-change-history-link-ws-history')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('workspace-change-history-link-ws-history').getAttribute('href')).toBe(
+      '/clarion-app/llm-client/workspaces/ws-history/changes',
+    );
   });
 });
 

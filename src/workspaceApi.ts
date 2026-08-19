@@ -1,7 +1,7 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { createBaseQuery } from '@clarion-app/frontend-base';
 import { backend } from './config';
-import { CodingWorkspaceType, FlatPaginatedEnvelope } from './types';
+import { CodingWorkspaceType, CodingWorkspaceChangeType, FlatPaginatedEnvelope } from './types';
 
 /**
  * POST coding-project's 201 response shape (CodingProjectController::
@@ -25,14 +25,14 @@ export interface CreateCodingProjectRequest {
  * createCodingProject, updateWorkspaceConfirmationSetting, and
  * deleteCodingProject (contracts/reused-endpoints.md: zero backend
  * changes, all three calls hit CodingProjectController exactly as it
- * exists today). US3 extends this same file again with the
+ * exists today). US3 (this phase) extends this same file again with the
  * change-history query, rather than creating a second slice, mirroring
  * mcpClientServerApi.ts's own single-file-per-feature precedent.
  */
 export const workspaceApi = createApi({
   reducerPath: 'llm-client-workspaceApi',
   baseQuery: createBaseQuery({ routePrefix: '/api/clarion-app/llm-client', backendConfig: backend }),
-  tagTypes: ['CodingWorkspace'],
+  tagTypes: ['CodingWorkspace', 'WorkspaceChange'],
   endpoints: (builder) => ({
     // page is sent only when > 1 (T006/research.md D4's convention,
     // mirroring runApi.ts) so the default/first-page request shape never
@@ -89,6 +89,15 @@ export const workspaceApi = createApi({
       }),
       invalidatesTags: [{ type: 'CodingWorkspace' as const, id: 'LIST' }],
     }),
+    // US3 -- GET coding-project/{id}/changes (contracts/workspace-change-
+    // history-api.md), the flat envelope this feature's own T006 decision
+    // settled on. `page` is sent only when > 1 (mirrors runApi.ts's exact
+    // convention, and getCodingProjects above), so the default/first-page
+    // request shape stays a stable cache key.
+    getWorkspaceChanges: builder.query<FlatPaginatedEnvelope<CodingWorkspaceChangeType>, { id: string; page?: number }>({
+      query: ({ id, page }) => (page && page > 1 ? `/coding-project/${id}/changes?page=${page}` : `/coding-project/${id}/changes`),
+      providesTags: (_result, _error, { id }) => [{ type: 'WorkspaceChange' as const, id }],
+    }),
   }),
 });
 
@@ -97,4 +106,6 @@ export const {
   useCreateCodingProjectMutation,
   useUpdateWorkspaceConfirmationSettingMutation,
   useDeleteCodingProjectMutation,
+  useGetWorkspaceChangesQuery,
+  useLazyGetWorkspaceChangesQuery,
 } = workspaceApi;
