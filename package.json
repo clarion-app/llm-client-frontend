@@ -57,7 +57,8 @@
                 "llmClientAgentHelperApi",
                 "llmClientDelegationApi",
                 "llmClientCapabilityOfferingApi",
-                "llmClientMcpClientServerApi"
+                "llmClientMcpClientServerApi",
+                "llmClientWorkspaceApi"
             ],
             "routes": [
                 {
@@ -119,6 +120,14 @@
                 {
                     "path": "/clarion-app/llm-client/mcp-servers",
                     "element": "<McpServerManagement />"
+                },
+                {
+                    "path": "/clarion-app/llm-client/workspaces",
+                    "element": "<WorkspaceBrowser />"
+                },
+                {
+                    "path": "/clarion-app/llm-client/workspaces/:id/changes",
+                    "element": "<WorkspaceChangeHistory />"
                 }
             ],
             "menu": {
@@ -143,6 +152,10 @@
                     {
                         "name": "MCP Servers",
                         "path": "/clarion-app/llm-client/mcp-servers"
+                    },
+                    {
+                        "name": "Workspaces",
+                        "path": "/clarion-app/llm-client/workspaces"
                     }
                 ],
                 "pinnedEntries": [
