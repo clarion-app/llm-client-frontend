@@ -15,10 +15,13 @@ const METHOD_SUFFIX: Record<AnswerMethod, string> = {
   typed_reply: "(typed reply)",
 };
 
+// Used only when the server sends no outcome text of its own.
 const RESOLVED_TEXT: Record<Exclude<QuestionState, "pending" | "answered">, string> = {
   expired: "Expired — no longer awaiting a reply.",
   withdrawn: "Withdrawn.",
   undeliverable: "Could not be delivered.",
+  expired_assumed: "Expired — the agent continued on its stated assumption.",
+  stopped: "Expired — work stopped. Answer to resume.",
 };
 
 const NOT_PENDING_TEXT: Record<Exclude<QuestionState, "pending">, string> = {
@@ -26,6 +29,8 @@ const NOT_PENDING_TEXT: Record<Exclude<QuestionState, "pending">, string> = {
   expired: "This question expired and is no longer awaiting a reply.",
   withdrawn: "This question was withdrawn and is no longer awaiting a reply.",
   undeliverable: "This question could not be delivered.",
+  expired_assumed: "This question expired and the agent continued on its stated assumption.",
+  stopped: "Work on this question stopped at its deadline. Answer it to resume.",
 };
 
 function choiceLabel(choice: QuestionChoice): string {
@@ -33,6 +38,9 @@ function choiceLabel(choice: QuestionChoice): string {
 }
 
 function outcomeText(question: QuestionView): string {
+  if (question.outcome_text) {
+    return question.outcome_text;
+  }
   if (question.state === "answered") {
     const answer = question.answer;
     if (!answer) {
@@ -69,9 +77,11 @@ function ResolvedQuestion({ question }: QuestionFormProps) {
   );
 }
 
-// The web form for a pending question. Built only from native, labelled
-// form controls with no custom key handling, so the browser's own keyboard
-// and assistive-technology behavior operates it.
+// The web form for a question that still takes an answer: pending, or
+// stopped at its deadline (shown with its outcome line above the form).
+// Built only from native, labelled form controls with no custom key
+// handling, so the browser's own keyboard and assistive-technology behavior
+// operates it.
 function PendingQuestion({ question }: QuestionFormProps) {
   const baseId = useId();
   const headingId = `${baseId}-question`;
@@ -84,6 +94,9 @@ function PendingQuestion({ question }: QuestionFormProps) {
 
   const hasChoices = question.choices.length > 0;
   const multiple = question.allow_multiple;
+  const stillPending = question.state === "pending";
+  const statement = stillPending && question.expiry_statement ? question.expiry_statement : null;
+  const outcome = !stillPending && question.outcome_text ? question.outcome_text : null;
   const textEnabled = !hasChoices || somethingElse;
 
   const pickSingle = (number: number) => {
@@ -124,10 +137,21 @@ function PendingQuestion({ question }: QuestionFormProps) {
     try {
       await answerQuestion(args).unwrap();
     } catch (error: unknown) {
-      const failure = error as { status?: unknown; data?: { state?: unknown; message?: unknown } };
+      const failure = error as {
+        status?: unknown;
+        data?: { state?: unknown; message?: unknown; question?: { outcome_text?: unknown } | null };
+      };
       if (failure?.status === 409) {
         const state = failure.data?.state as Exclude<QuestionState, "pending"> | undefined;
-        setFeedback({ role: "status", text: (state && NOT_PENDING_TEXT[state]) || NOT_PENDING_TEXT.answered });
+        // The server's own description of how the question was resolved
+        // (e.g. naming the assumption the agent proceeded on) wins over the
+        // generic text kept for older servers.
+        const serverText = failure.data?.question?.outcome_text;
+        const text =
+          typeof serverText === "string" && serverText.trim() !== ""
+            ? serverText
+            : (state && NOT_PENDING_TEXT[state]) || NOT_PENDING_TEXT.answered;
+        setFeedback({ role: "status", text });
       } else if (failure?.status === 422 && typeof failure.data?.message === "string") {
         setFeedback({ role: "alert", text: failure.data.message });
       } else {
@@ -153,6 +177,13 @@ function PendingQuestion({ question }: QuestionFormProps) {
   return (
     <form className="agent-question" aria-labelledby={headingId} onSubmit={onSubmit} noValidate>
       {question.preamble && <p className="whitespace-pre-wrap mb-2">{question.preamble}</p>}
+      {outcome && (
+        // One status line at a time: a server reply to a submission takes
+        // the role while it is shown.
+        <p role={feedback?.role === "status" ? undefined : "status"} className="mb-2 italic">
+          {outcome}
+        </p>
+      )}
       {hasChoices ? (
         <fieldset>
           <legend id={headingId} className="whitespace-pre-wrap font-semibold">{question.question}</legend>
@@ -208,6 +239,7 @@ function PendingQuestion({ question }: QuestionFormProps) {
           {textArea}
         </>
       )}
+      {statement && <p className="mt-2 whitespace-pre-wrap">{statement}</p>}
       {feedback && (
         <p role={feedback.role} className={feedback.role === "alert" ? "mt-2 text-red-600" : "mt-2"}>
           {feedback.text}
@@ -221,7 +253,10 @@ function PendingQuestion({ question }: QuestionFormProps) {
 }
 
 export function QuestionForm({ question }: QuestionFormProps) {
-  if (question.state !== "pending") {
+  // An older server sends no `answerable`: only a pending question took an
+  // answer there.
+  const answerable = question.answerable ?? question.state === "pending";
+  if (!answerable) {
     return <ResolvedQuestion question={question} />;
   }
   return <PendingQuestion question={question} />;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -211,5 +211,77 @@ describe('RunsList', () => {
     expect(screen.queryByTestId(`run-row-${leakedRun.id}`)).not.toBeInTheDocument();
     // Only the one row the API actually returned may be present.
     expect(screen.queryAllByTestId(/^run-row-/)).toHaveLength(1);
+  });
+});
+
+// `question_stopped` is not yet part of RunSummary; the extension keeps this
+// file compiling either way.
+type RunSummaryWithFlags = RunSummary & { awaiting_user?: boolean; question_stopped?: boolean };
+
+describe('RunsList — runs stopped on a question', () => {
+  beforeEach(() => {
+    mockRunsResponse = {
+      data: [],
+      meta: { current_page: 1, per_page: 20, total: 0, last_page: 1 },
+    };
+  });
+
+  it('marks a run stopped on its question, and only that run', async () => {
+    const stopped: RunSummaryWithFlags = {
+      ...makeRun({ id: 'run-stopped', end_state: 'in_progress', ended_at: null, duration_ms: null }),
+      awaiting_user: true,
+      question_stopped: true,
+    };
+    const waiting: RunSummaryWithFlags = {
+      ...makeRun({ id: 'run-waiting', end_state: 'in_progress', ended_at: null, duration_ms: null }),
+      awaiting_user: true,
+      question_stopped: false,
+    };
+    const done: RunSummaryWithFlags = { ...makeRun({ id: 'run-done' }), awaiting_user: false, question_stopped: false };
+    const older: RunSummaryWithFlags = makeRun({ id: 'run-older-server' });
+    mockRunsResponse = {
+      data: [stopped, waiting, done, older],
+      meta: { current_page: 1, per_page: 20, total: 4, last_page: 1 },
+    };
+
+    renderRunsList();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('run-row-run-stopped')).toBeInTheDocument();
+    });
+
+    const badge = within(screen.getByTestId('run-row-run-stopped')).getByTestId('run-question-stopped-badge');
+    expect(badge.textContent).toBe('Stopped — waiting for your answer');
+
+    expect(screen.getAllByTestId('run-question-stopped-badge')).toHaveLength(1);
+    for (const id of ['run-waiting', 'run-done', 'run-older-server']) {
+      expect(within(screen.getByTestId(`run-row-${id}`)).queryByTestId('run-question-stopped-badge')).toBeNull();
+    }
+    // The list adds only the stopped badge: a merely waiting run is not badged here.
+    expect(screen.queryByTestId('run-awaiting-user-badge')).toBeNull();
+  });
+
+  it('still opens a stopped run\'s diagram when its row is selected', async () => {
+    const stopped: RunSummaryWithFlags = {
+      ...makeRun({ id: 'run-stopped', end_state: 'in_progress', ended_at: null, duration_ms: null }),
+      awaiting_user: true,
+      question_stopped: true,
+    };
+    mockRunsResponse = {
+      data: [stopped],
+      meta: { current_page: 1, per_page: 20, total: 1, last_page: 1 },
+    };
+
+    renderRunsList();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('run-question-stopped-badge')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('run-question-stopped-badge'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('run-diagram-route-marker')).toBeInTheDocument();
+    });
   });
 });

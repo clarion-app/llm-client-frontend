@@ -82,6 +82,14 @@ export function RunsList(): React.ReactElement {
             <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium">
               {runStatusLabel(run.end_state)}
             </span>
+            {run.question_stopped === true && (
+              <span
+                data-testid="run-question-stopped-badge"
+                className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800"
+              >
+                Stopped — waiting for your answer
+              </span>
+            )}
           </div>
         </div>
       ))}

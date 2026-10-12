@@ -33,19 +33,33 @@ export interface RunActionNodeProps {
   delegation?: Delegation;
   /** Navigates the diagram to a delegation's own `helper_run_id` (US3). */
   onOpenDelegation?: (helperRunId: string) => void;
+  /**
+   * Whether the run's work has stopped on an unanswered question (the run
+   * summary's `question_stopped`), so its waiting `ask_user` action reads as
+   * stopped rather than merely waiting.
+   */
+  questionStopped?: boolean;
 }
 
-function actionStatusLabel(action: ActionSummary): string {
+/** The failure reason an `ask_user` action records when its question expired and the agent went on its stated assumption. */
+const EXPIRED_ASSUMED_REASON = 'question expired_assumed';
+
+function isAssumedAsk(action: ActionSummary): boolean {
+  return action.target === 'ask_user' && action.outcome === 'failure' && action.failure_reason === EXPIRED_ASSUMED_REASON;
+}
+
+function actionStatusLabel(action: ActionSummary, questionStopped: boolean): string {
   switch (action.outcome) {
     case 'in_progress':
       return 'Running';
     case 'awaiting_confirmation':
       // A paused ask_user call is waiting on the user's reply, not on an approval.
-      return action.target === 'ask_user' ? 'Waiting for your answer' : 'Awaiting confirmation';
+      if (action.target !== 'ask_user') return 'Awaiting confirmation';
+      return questionStopped ? 'Expired — work stopped' : 'Waiting for your answer';
     case 'success':
       return 'Success';
     case 'failure':
-      return 'Failed';
+      return isAssumedAsk(action) ? 'Expired — proceeded on assumption' : 'Failed';
     case 'unfinished':
       return 'Unfinished';
     default:
@@ -63,9 +77,12 @@ export function RunActionNode({
   children,
   delegation,
   onOpenDelegation,
+  questionStopped = false,
 }: RunActionNodeProps): React.ReactElement {
   const isRunning = action.outcome === 'in_progress' && action.ended_at === null;
-  const isFailed = action.outcome === 'failure';
+  // Proceeding on a stated assumption is the agent doing what it said it
+  // would, not a failure to show in red.
+  const isFailed = action.outcome === 'failure' && !isAssumedAsk(action);
   const delegationHelperRunId =
     action.action_type === 'delegation' ? delegation?.helper_run_id ?? null : null;
 
@@ -99,7 +116,7 @@ export function RunActionNode({
         <span className="text-xs uppercase text-gray-500">{action.action_type}</span>
         <span className="font-medium">{action.target ?? '(no target)'}</span>
         <span className={isFailed ? 'text-red-700' : isRunning ? 'text-blue-700' : 'text-green-700'}>
-          {actionStatusLabel(action)}
+          {actionStatusLabel(action, questionStopped)}
         </span>
         {overlap && (
           <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-800">
