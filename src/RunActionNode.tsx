@@ -40,7 +40,8 @@ function actionStatusLabel(action: ActionSummary): string {
     case 'in_progress':
       return 'Running';
     case 'awaiting_confirmation':
-      return 'Awaiting confirmation';
+      // A paused ask_user call is waiting on the user's reply, not on an approval.
+      return action.target === 'ask_user' ? 'Waiting for your answer' : 'Awaiting confirmation';
     case 'success':
       return 'Success';
     case 'failure':
