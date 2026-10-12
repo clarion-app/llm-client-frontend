@@ -8,6 +8,30 @@ interface MessagePropsType extends MessageType {
   onDelete: (messageId: string) => void;
 }
 
+// The `kind` marker of a message's tool_data, which may arrive as an object
+// or as a JSON string.
+function toolDataKind(toolData: unknown): string | null {
+  let value = toolData;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (value && typeof value === 'object' && typeof (value as { kind?: unknown }).kind === 'string') {
+    return (value as { kind: string }).kind;
+  }
+  return null;
+}
+
+// Questions an agent asks the user, their follow-up notices, and the user's
+// answers are plain text whose numbered lines must be shown exactly as
+// written, so they bypass markdown and the raw tool-data dump.
+function isAgentQuestionMessage(toolData: unknown): boolean {
+  return toolDataKind(toolData)?.startsWith('agent_question') ?? false;
+}
+
 const Message = (props: MessagePropsType) => {
   const [showRaw, setShowRaw] = useState(false);
 
@@ -34,6 +58,7 @@ const Message = (props: MessagePropsType) => {
     );
   }
 
+  const plainText = isAgentQuestionMessage(props.tool_data);
   const content = props.content.replace(/```/g, "\n```");
   return (
     <div className="px-4 py-2 message m-4">
@@ -54,8 +79,13 @@ const Message = (props: MessagePropsType) => {
           ""
         )}
       </div>
-      <div className="p-2 message-content" style={{overflowWrap: "break-word"}}>
-        {!showRaw ?
+      <div
+        className={plainText ? "p-2 message-content whitespace-pre-wrap" : "p-2 message-content"}
+        style={plainText ? {overflowWrap: "break-word", whiteSpace: "pre-wrap"} : {overflowWrap: "break-word"}}
+      >
+        {plainText ?
+        props.content :
+        !showRaw ?
         <Markdown
           options={{
             disableParsingRawHTML: true,
@@ -71,7 +101,7 @@ const Message = (props: MessagePropsType) => {
         <pre className="p-2 m-1" style={{backgroundColor: "#FAFAFA", overflow: "auto"}}>
           {props.content}
         </pre>}
-        {props.tool_data && (
+        {props.tool_data && !plainText && (
           <div className="mt-4 p-2" style={{backgroundColor: "#F0F0F0", borderRadius: "4px"}}>
             <h4 className="font-bold mb-2">Tool Data:</h4>
             <pre style={{whiteSpace: "pre-wrap", wordWrap: "break-word"}}>
