@@ -393,3 +393,177 @@ describe('QuestionForm - a question that is no longer pending', () => {
     expect(container.textContent).not.toContain('Answered:');
   });
 });
+
+/**
+ * Newer servers add keys to the question view: whether the question still
+ * takes an answer, the plain-language statement of what happens if it goes
+ * unanswered, and a one-line outcome for anything no longer pending. A
+ * question whose work stopped at its deadline still takes an answer, so it
+ * keeps the full form, with its outcome shown above it.
+ *
+ * These fixtures are built as plain objects and cast, because the view type
+ * does not name the new keys or states yet; the cast can go once it does.
+ */
+const EXPIRY_STATEMENT =
+  'If there is no answer by 09:00 UTC on 12 Oct 2026 (1 day after this was asked), work on this task will pause until you reply.';
+const STOPPED_OUTCOME = 'Expired — work stopped. Answer to resume.';
+
+function newerView(extra: Record<string, unknown>): QuestionView {
+  return { ...view(), ...extra } as unknown as QuestionView;
+}
+
+function stoppedView(extra: Record<string, unknown> = {}): QuestionView {
+  return newerView({
+    state: 'stopped',
+    answerable: true,
+    if_unanswered: 'stop',
+    consequential: false,
+    assumed_answer: null,
+    expiry_statement: EXPIRY_STATEMENT,
+    outcome_text: STOPPED_OUTCOME,
+    stopped_at: '2026-10-12T09:00:05Z',
+    answered_late: false,
+    ...extra,
+  });
+}
+
+function follows(earlier: Node, later: Node): boolean {
+  return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+describe('QuestionForm - what happens if a question goes unanswered', () => {
+  beforeEach(() => {
+    cleanup();
+    requests = [];
+    respond = () => ({ data: { status: 'answered', question: null, message: null } });
+  });
+
+  it('shows the expiry statement of a pending question verbatim, under its choices', () => {
+    const { container } = renderForm(newerView({
+      answerable: true,
+      if_unanswered: 'stop',
+      consequential: false,
+      assumed_answer: null,
+      expiry_statement: EXPIRY_STATEMENT,
+      outcome_text: null,
+      stopped_at: null,
+      answered_late: false,
+    }));
+
+    const statement = screen.getByText(EXPIRY_STATEMENT);
+    expect(statement.textContent).toBe(EXPIRY_STATEMENT);
+    const form = screen.getByRole('button', { name: 'Submit answer' }).closest('form')!;
+    expect(form.contains(statement), 'the statement is part of the question\'s form').toBe(true);
+    for (const name of ['1. Backend', '2. Frontend', '3. Docs', 'Answer with something else']) {
+      expect(follows(screen.getByRole('radio', { name }), statement), `the statement comes after "${name}"`).toBe(true);
+    }
+    // Still a pending question: no outcome line.
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(container.textContent).not.toContain(STOPPED_OUTCOME);
+  });
+
+  it('keeps the full form for a question whose work stopped, with its outcome as a status line above it', () => {
+    renderForm(stoppedView());
+
+    const group = screen.getByRole('group', { name: QUESTION });
+    for (const name of ['1. Backend', '2. Frontend', '3. Docs', 'Answer with something else']) {
+      const radio = screen.getByRole('radio', { name });
+      expect(group.contains(radio)).toBe(true);
+      expect(radio).toBeEnabled();
+    }
+    expect(screen.getByRole('textbox', { name: 'Your answer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submit answer' })).toBeEnabled();
+
+    const status = screen.getByRole('status');
+    expect(status.textContent).toBe(STOPPED_OUTCOME);
+    expect(follows(status, group), 'the outcome line comes before the choices').toBe(true);
+  });
+
+  it('keeps checkboxes for a stopped multi-select question', () => {
+    renderForm(stoppedView({ allow_multiple: true }));
+
+    for (const name of ['1. Backend', '2. Frontend', '3. Docs', 'Answer with something else']) {
+      expect(screen.getByRole('checkbox', { name })).toBeEnabled();
+    }
+    expect(screen.getByRole('status').textContent).toBe(STOPPED_OUTCOME);
+  });
+
+  it('submits an answer to a stopped question exactly as for a pending one', async () => {
+    renderForm(stoppedView());
+
+    fireEvent.click(screen.getByRole('radio', { name: '2. Frontend' }));
+    submit();
+
+    expect(await onlyRequestBody()).toStrictEqual({ selected: [2] });
+    expect(answerRequests()[0].method).toBe('POST');
+  });
+
+  it('submits a typed answer to a stopped question exactly as for a pending one', async () => {
+    renderForm(stoppedView());
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Answer with something else' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'go with the docs after all' } });
+    submit();
+
+    expect(await onlyRequestBody()).toStrictEqual({ text: 'go with the docs after all' });
+    expect(answerRequests()[0].method).toBe('POST');
+  });
+
+  it('shows a question answered after its work stopped read-only, with its outcome', () => {
+    const outcome = 'Answered after work stopped: 2. Frontend';
+    const { container } = renderForm(newerView({
+      state: 'answered',
+      answer: { is_selection: true, selected: [{ number: 2, text: 'Frontend' }], raw_reply: '2', method: 'web_form' },
+      answerable: false,
+      if_unanswered: 'stop',
+      consequential: false,
+      assumed_answer: null,
+      expiry_statement: EXPIRY_STATEMENT,
+      outcome_text: outcome,
+      stopped_at: '2026-10-12T09:00:05Z',
+      answered_late: true,
+    }));
+
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).toBeNull();
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(container.textContent).toContain(QUESTION);
+    for (const choice of ['1. Backend', '2. Frontend', '3. Docs']) {
+      expect(container.textContent).toContain(choice);
+    }
+    expect(screen.getByText(outcome).textContent).toBe(outcome);
+    // The server's outcome replaces the locally composed one.
+    expect(container.textContent).not.toContain('Answered: 2. Frontend');
+  });
+
+  it('prefers the server\'s outcome text for any question that is no longer pending', () => {
+    const outcome = 'Withdrawn — the conversation was ended.';
+    const { container } = renderForm(newerView({ state: 'withdrawn', answerable: false, outcome_text: outcome }));
+
+    expect(screen.getByText(outcome)).toBeInTheDocument();
+    expect(container.textContent).not.toContain('Withdrawn.');
+  });
+
+  it('renders a question from an older server, without the new keys, as before', () => {
+    // Pending: the form, with nothing added to it.
+    const { container } = renderForm(view());
+    expect(screen.getByRole('group', { name: QUESTION })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submit answer' })).toBeEnabled();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(Array.from(container.querySelectorAll('p')).map((p) => p.textContent)).toStrictEqual([]);
+
+    // No longer pending: read-only, with the outcome composed locally.
+    cleanup();
+    const answered = renderForm(view({
+      state: 'answered',
+      answer: { is_selection: true, selected: [{ number: 2, text: 'Frontend' }], raw_reply: '2', method: 'web_form' },
+    }));
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).toBeNull();
+    expect(answered.container.textContent).toContain('Answered: 2. Frontend (from the web form)');
+
+    cleanup();
+    const expired = renderForm(view({ state: 'expired' }));
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).toBeNull();
+    expect(expired.container.textContent).toContain('Expired — no longer awaiting a reply.');
+  });
+});

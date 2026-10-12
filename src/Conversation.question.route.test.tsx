@@ -306,4 +306,43 @@ describe('Conversation route — answering a question through the form', () => {
     expect(await screen.findByText('Answered: 2. Frontend (from Telegram)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Submit answer' })).toBeNull();
   });
+
+  it('a question whose work stopped at its deadline still shows an answerable form, and answering it posts and re-fetches', async () => {
+    // Built as a plain object and cast: the view type does not name the
+    // stopped state or the newer keys yet.
+    serverView = {
+      ...pendingView(),
+      state: 'stopped',
+      answerable: true,
+      if_unanswered: 'stop',
+      consequential: false,
+      assumed_answer: null,
+      expiry_statement:
+        'If there is no answer by 09:00 UTC on 12 Oct 2026 (1 day after this was asked), work on this task will pause until you reply.',
+      outcome_text: 'Expired — work stopped. Answer to resume.',
+      stopped_at: '2026-10-12T09:00:05Z',
+      answered_late: false,
+    } as unknown as QuestionView;
+    renderConversationRoute();
+
+    const group = await screen.findByRole('group', { name: 'Which part should I change first?' });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Expired — work stopped. Answer to resume.');
+    const fetchesBeforeSubmit = messageListFetches;
+
+    fireEvent.click(screen.getByRole('radio', { name: '2. Frontend' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit answer' }));
+
+    await waitFor(() => {
+      expect(requests.filter((r) => r.url.replace(/^\//, '') === `question/${QUESTION_ID}/answer`)).toHaveLength(1);
+    });
+    const answer = requests.find((r) => r.url.replace(/^\//, '') === `question/${QUESTION_ID}/answer`)!;
+    expect(answer.method).toBe('POST');
+    expect(answer.body).toStrictEqual({ selected: [2] });
+    expect(requests, 'only the answer was sent').toHaveLength(1);
+
+    await waitFor(() => {
+      expect(messageListFetches).toBeGreaterThan(fetchesBeforeSubmit);
+    });
+  });
 });

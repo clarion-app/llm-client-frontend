@@ -23,7 +23,16 @@ export interface QuestionChoice {
   text: string;
 }
 
-export type QuestionState = 'pending' | 'answered' | 'expired' | 'withdrawn' | 'undeliverable';
+export type QuestionState =
+  | 'pending'
+  | 'answered'
+  | 'expired'
+  | 'withdrawn'
+  | 'undeliverable'
+  | 'expired_assumed'
+  | 'stopped';
+
+export type UnansweredPolicy = 'proceed_on_assumption' | 'stop';
 
 export type AnswerMethod = 'typed_reply' | 'web_form' | 'messaging_option';
 
@@ -42,6 +51,26 @@ export interface QuestionView {
     raw_reply: string;
     method: AnswerMethod;
   } | null;
+  // The keys below are sent by newer servers only; an older server's view
+  // lacks them and is rendered as before.
+  // Whether the question still takes an answer (pending, or stopped at its
+  // deadline); the form is shown exactly when it does.
+  answerable?: boolean;
+  // What happens if it goes unanswered, chosen when it was asked; null for a
+  // question asked before that choice existed.
+  if_unanswered?: UnansweredPolicy | null;
+  consequential?: boolean;
+  assumed_answer?: {
+    is_selection: boolean;
+    selected: QuestionChoice[];
+    raw_reply: string;
+  } | null;
+  // The advance statement exactly as the question's text carries it.
+  expiry_statement?: string | null;
+  // One line saying what became of a question no longer pending.
+  outcome_text?: string | null;
+  stopped_at?: string | null;
+  answered_late?: boolean;
 }
 
 export interface ConversationType extends LaravelModelType {
