@@ -3,6 +3,9 @@ import { render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { conversationApi } from './conversationApi';
+import { messageApi } from './messageApi';
+import type { QuestionView } from './types';
+import type { ReactElement } from 'react';
 
 vi.mock('.', () => ({
   backend: {
@@ -164,5 +167,107 @@ describe('Message - agent question messages', () => {
 
     expect(container.querySelector('ol')).not.toBeNull();
     expect(screen.queryByText('Tool Data:')).toBeNull();
+  });
+});
+
+// The owner's message list carries the stored question on its display
+// message; the screen then shows the question as a form in place of its
+// plain-text rendering. Without that view (a reader other than the owner, or
+// an older server) the plain text stays.
+describe('Message - agent question form', () => {
+  const pendingView: QuestionView = {
+    id: 'q-1',
+    question: 'Which part should I change first?',
+    preamble: null,
+    choices: [
+      { number: 1, text: 'Backend' },
+      { number: 2, text: 'Frontend' },
+      { number: 3, text: 'Docs' },
+    ],
+    allow_multiple: false,
+    state: 'pending',
+    expires_at: '2026-10-12T09:00:00Z',
+    answer: null,
+  };
+
+  function messageStore() {
+    return configureStore({
+      reducer: { [messageApi.reducerPath]: messageApi.reducer },
+      middleware: (getDefault) => getDefault().concat(messageApi.middleware),
+    });
+  }
+
+  function renderWithStore(ui: ReactElement) {
+    return render(<Provider store={messageStore()}>{ui}</Provider>);
+  }
+
+  it('renders the question as a form when the display message carries its view', () => {
+    const { container } = renderWithStore(
+      <Message
+        {...baseProps}
+        content={QUESTION_TEXT}
+        tool_data={asToolData({ kind: 'agent_question', question_id: 'q-1', state: 'pending' })}
+        question={pendingView}
+      />,
+    );
+
+    expect(screen.getByRole('group', { name: 'Which part should I change first?' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '2. Frontend' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Submit answer' })).toBeTruthy();
+    expect(elementWithText(container, QUESTION_TEXT)).toBeUndefined();
+    expect(container.textContent ?? '').not.toContain('Reply with the number of your choice');
+    expect(screen.queryByText('Tool Data:')).toBeNull();
+  });
+
+  it('renders the form for tool_data delivered as a JSON string', () => {
+    renderWithStore(
+      <Message
+        {...baseProps}
+        content={QUESTION_TEXT}
+        tool_data={JSON.stringify({ kind: 'agent_question', question_id: 'q-1', state: 'pending' })}
+        question={pendingView}
+      />,
+    );
+
+    expect(screen.getByRole('radio', { name: '2. Frontend' })).toBeTruthy();
+  });
+
+  it('keeps the plain text when the display message carries no view', () => {
+    const { container } = renderWithStore(
+      <Message
+        {...baseProps}
+        content={QUESTION_TEXT}
+        tool_data={asToolData({ kind: 'agent_question', question_id: 'q-1', state: 'pending' })}
+      />,
+    );
+
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).toBeNull();
+    const body = elementWithText(container, QUESTION_TEXT);
+    expect(body).toBeDefined();
+    expect(isPreWrapped(body!)).toBe(true);
+  });
+
+  it.each(['agent_question_notice', 'agent_question_answer'])('never renders a form for a %s message', (kind) => {
+    const { container } = renderWithStore(
+      <Message
+        {...baseProps}
+        content={QUESTION_TEXT}
+        tool_data={asToolData({ kind, question_id: 'q-1', state: 'pending' })}
+        question={pendingView}
+      />,
+    );
+
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).toBeNull();
+    expect(elementWithText(container, QUESTION_TEXT)).toBeDefined();
+  });
+
+  it('never renders a form for a message that is not a question', () => {
+    renderWithStore(<Message {...baseProps} content="Hello, world!" tool_data={null} question={pendingView} />);
+
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).toBeNull();
+    expect(screen.getByText('Hello, world!')).toBeTruthy();
   });
 });

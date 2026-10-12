@@ -3,6 +3,7 @@ import { MessageType, ApiCallConfirmationType } from "./types";
 import Markdown from "markdown-to-jsx";
 import CodeBlock from "./CodeBlock";
 import ApiCallConfirmation from "./ApiCallConfirmation";
+import { QuestionForm } from "./QuestionForm";
 
 interface MessagePropsType extends MessageType {
   onDelete: (messageId: string) => void;
@@ -58,6 +59,12 @@ const Message = (props: MessagePropsType) => {
     );
   }
 
+  // The owner's message list carries the question's current state on its
+  // display message; with it the question is shown as a form (or its
+  // outcome) in place of the plain text.
+  const questionForm = toolDataKind(props.tool_data) === 'agent_question' && props.question
+    ? <QuestionForm question={props.question} />
+    : null;
   const plainText = isAgentQuestionMessage(props.tool_data);
   const content = props.content.replace(/```/g, "\n```");
   return (
@@ -83,7 +90,8 @@ const Message = (props: MessagePropsType) => {
         className={plainText ? "p-2 message-content whitespace-pre-wrap" : "p-2 message-content"}
         style={plainText ? {overflowWrap: "break-word", whiteSpace: "pre-wrap"} : {overflowWrap: "break-word"}}
       >
-        {plainText ?
+        {questionForm ??
+        (plainText ?
         props.content :
         !showRaw ?
         <Markdown
@@ -100,7 +108,7 @@ const Message = (props: MessagePropsType) => {
         </Markdown> :
         <pre className="p-2 m-1" style={{backgroundColor: "#FAFAFA", overflow: "auto"}}>
           {props.content}
-        </pre>}
+        </pre>)}
         {props.tool_data && !plainText && (
           <div className="mt-4 p-2" style={{backgroundColor: "#F0F0F0", borderRadius: "4px"}}>
             <h4 className="font-bold mb-2">Tool Data:</h4>

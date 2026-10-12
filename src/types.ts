@@ -13,6 +13,35 @@ export interface MessageType extends LaravelModelType {
   user: string;
   streaming: boolean;
   responseTime: number;
+  // Present only on a question's display message, in the conversation
+  // owner's message list.
+  question?: QuestionView;
+}
+
+export interface QuestionChoice {
+  number: number;
+  text: string;
+}
+
+export type QuestionState = 'pending' | 'answered' | 'expired' | 'withdrawn' | 'undeliverable';
+
+export type AnswerMethod = 'typed_reply' | 'web_form' | 'messaging_option';
+
+// A question an agent asked, as the server holds it now.
+export interface QuestionView {
+  id: string;
+  question: string;
+  preamble: string | null;
+  choices: QuestionChoice[];
+  allow_multiple: boolean;
+  state: QuestionState;
+  expires_at: string;
+  answer: {
+    is_selection: boolean;
+    selected: QuestionChoice[];
+    raw_reply: string;
+    method: AnswerMethod;
+  } | null;
 }
 
 export interface ConversationType extends LaravelModelType {
