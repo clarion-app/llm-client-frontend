@@ -1,7 +1,7 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { createBaseQuery } from '@clarion-app/frontend-base';
 import { backend } from './config';
-import { MessageType } from './types';
+import { MessageType, QuestionView } from './types';
 
 export const messageApi = createApi({
     reducerPath: 'llm-client-messageApi',
@@ -43,6 +43,19 @@ export const messageApi = createApi({
             }),
             invalidatesTags: [{ type: 'Message' }],
         }),
+        // Answers a pending question with a selection or free text, never
+        // both; the message list then re-fetches to show its new state.
+        answerQuestion: builder.mutation<
+            { status: 'answered'; question: QuestionView; message: MessageType },
+            { questionId: string; selected?: number[]; text?: string }
+        >({
+            query: ({ questionId, ...body }) => ({
+                url: `question/${questionId}/answer`,
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['Message'],
+        }),
         updateMessageLocally: builder.mutation({
             queryFn: (message) => {
                 // Don't make an API call, just return a success response
@@ -71,4 +84,5 @@ export const {
     useUpdateMessageMutation,
     useCreateMessageMutation,
     useUpdateMessageLocallyMutation,
+    useAnswerQuestionMutation,
   } = messageApi;
