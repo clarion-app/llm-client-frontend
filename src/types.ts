@@ -129,6 +129,8 @@ export interface RunSummary {
   step_count: number;
   action_count: number;
   conversation_id: string | null;
+  /** True exactly while a question to the user is pending for this run. */
+  awaiting_user?: boolean;
 }
 
 export interface StepSummary {

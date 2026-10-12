@@ -489,6 +489,14 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
         >
           {runStatusLabel(run)}
         </span>
+        {run.awaiting_user === true && (
+          <span
+            data-testid="run-awaiting-user-badge"
+            className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+          >
+            Waiting for you
+          </span>
+        )}
         {Array.isArray(delegations) && delegations.length > 0 && (
           <button
             type="button"
