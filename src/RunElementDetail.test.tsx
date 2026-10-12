@@ -422,6 +422,28 @@ describe('RunElementDetail — an ask_user question\'s record', () => {
     expect(textOf('run-element-detail-question-period')).toContain('120 minutes');
   });
 
+  it('names a one-minute waiting period in the singular', async () => {
+    await showAction(
+      askDetail(
+        'action-one-minute',
+        snapshot({
+          outcome: 'expired_assumed',
+          resolution: 'expired_assumed',
+          choices: [],
+          policy: {
+            ...proceedPolicy,
+            requested_wait_minutes: 1,
+            effective_wait_minutes: 1,
+            assumed_answer: { raw_reply: 'Autumn release', is_selection: false, selected: [] },
+          },
+        }),
+        { outcome: 'failure', failure_reason: 'question expired_assumed' },
+      ),
+    );
+
+    expect(textOf('run-element-detail-question-period')).toBe('Waiting period: 1 minute');
+  });
+
   it('shows a stopped question as expired with its work stopped', async () => {
     await showAction(
       askDetail(

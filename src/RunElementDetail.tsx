@@ -144,7 +144,9 @@ function QuestionSummary({ record }: { record: QuestionRecord }): React.ReactEle
       {policy && <div data-testid="run-element-detail-question-policy">If unanswered: {policyText(policy)}</div>}
       {assumed && <div data-testid="run-element-detail-question-assumption">Assumption: {assumptionText(assumed)}</div>}
       {policy && policy.effective_wait_minutes !== null && (
-        <div data-testid="run-element-detail-question-period">Waiting period: {policy.effective_wait_minutes} minutes</div>
+        <div data-testid="run-element-detail-question-period">
+          Waiting period: {policy.effective_wait_minutes} {policy.effective_wait_minutes === 1 ? 'minute' : 'minutes'}
+        </div>
       )}
     </div>
   );
