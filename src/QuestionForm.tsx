@@ -137,10 +137,21 @@ function PendingQuestion({ question }: QuestionFormProps) {
     try {
       await answerQuestion(args).unwrap();
     } catch (error: unknown) {
-      const failure = error as { status?: unknown; data?: { state?: unknown; message?: unknown } };
+      const failure = error as {
+        status?: unknown;
+        data?: { state?: unknown; message?: unknown; question?: { outcome_text?: unknown } | null };
+      };
       if (failure?.status === 409) {
         const state = failure.data?.state as Exclude<QuestionState, "pending"> | undefined;
-        setFeedback({ role: "status", text: (state && NOT_PENDING_TEXT[state]) || NOT_PENDING_TEXT.answered });
+        // The server's own description of how the question was resolved
+        // (e.g. naming the assumption the agent proceeded on) wins over the
+        // generic text kept for older servers.
+        const serverText = failure.data?.question?.outcome_text;
+        const text =
+          typeof serverText === "string" && serverText.trim() !== ""
+            ? serverText
+            : (state && NOT_PENDING_TEXT[state]) || NOT_PENDING_TEXT.answered;
+        setFeedback({ role: "status", text });
       } else if (failure?.status === 422 && typeof failure.data?.message === "string") {
         setFeedback({ role: "alert", text: failure.data.message });
       } else {

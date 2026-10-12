@@ -567,3 +567,102 @@ describe('QuestionForm - what happens if a question goes unanswered', () => {
     expect(expired.container.textContent).toContain('Expired — no longer awaiting a reply.');
   });
 });
+
+/**
+ * A question asked with a safe default says, while it waits, what the agent
+ * will assume if nobody answers. Once its deadline passes the agent goes on
+ * with that assumption: the question no longer takes an answer and says
+ * what was assumed. A submission that loses to that expiry is told the
+ * same, in the server's own words.
+ */
+const PROCEED_STATEMENT =
+  'If there is no answer by 09:00 UTC on 12 Oct 2026 (1 day after this was asked), the agent will continue assuming: 1. Backend';
+const ASSUMED_OUTCOME = 'Expired — no answer arrived in time; the agent continued assuming: 1. Backend';
+const ASSUMED = { is_selection: true, selected: [{ number: 1, text: 'Backend' }], raw_reply: '1' };
+
+function proceedView(extra: Record<string, unknown> = {}): QuestionView {
+  return newerView({
+    answerable: true,
+    if_unanswered: 'proceed_on_assumption',
+    consequential: false,
+    assumed_answer: ASSUMED,
+    expiry_statement: PROCEED_STATEMENT,
+    outcome_text: null,
+    stopped_at: null,
+    answered_late: false,
+    ...extra,
+  });
+}
+
+function assumedView(): QuestionView {
+  return proceedView({ state: 'expired_assumed', answerable: false, outcome_text: ASSUMED_OUTCOME });
+}
+
+describe('QuestionForm - a question that proceeds on an assumption', () => {
+  beforeEach(() => {
+    cleanup();
+    requests = [];
+    respond = () => ({ data: { status: 'answered', question: null, message: null } });
+  });
+
+  it('shows, while pending, the statement naming what the agent will assume', () => {
+    renderForm(proceedView());
+
+    const statement = screen.getByText(PROCEED_STATEMENT);
+    expect(statement.textContent).toBe(PROCEED_STATEMENT);
+    expect(screen.getByRole('button', { name: 'Submit answer' }).closest('form')!.contains(statement)).toBe(true);
+    expect(follows(screen.getByRole('radio', { name: 'Answer with something else' }), statement)).toBe(true);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('shows a question that proceeded on its assumption read-only, naming the assumption', () => {
+    const { container } = renderForm(assumedView());
+
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).toBeNull();
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(container.textContent).toContain(QUESTION);
+    expect(screen.getByText(ASSUMED_OUTCOME).textContent).toBe(ASSUMED_OUTCOME);
+    // The server's line, not the fallback composed locally.
+    expect(container.textContent).not.toContain('Expired — the agent continued on its stated assumption.');
+    expect(container.textContent).not.toContain(PROCEED_STATEMENT);
+  });
+
+  it('says what was assumed, in the server\'s words, when a submission loses to the expiry', async () => {
+    respond = () => ({
+      error: { status: 409, data: { code: 'question_not_pending', state: 'expired_assumed', question: assumedView() } },
+    });
+    renderForm(proceedView());
+
+    fireEvent.click(screen.getByRole('radio', { name: '2. Frontend' }));
+    submit();
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(ASSUMED_OUTCOME));
+  });
+
+  it('falls back to its own text when the losing submission\'s reply carries no outcome', async () => {
+    respond = () => ({
+      error: { status: 409, data: { code: 'question_not_pending', state: 'expired_assumed', question: view({ state: 'expired_assumed' as QuestionView['state'] }) } },
+    });
+    renderForm(proceedView());
+
+    fireEvent.click(screen.getByRole('radio', { name: '2. Frontend' }));
+    submit();
+
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe('This question expired and the agent continued on its stated assumption.'),
+    );
+  });
+
+  it('keeps reporting other lost submissions by their state', async () => {
+    // The server's outcome text is preferred only when it is there: an
+    // older server's 409 for an answered question reads as before.
+    respond = () => ({ error: { status: 409, data: { code: 'question_not_pending', state: 'answered', question: view({ state: 'answered' }) } } });
+    renderForm(proceedView());
+
+    fireEvent.click(screen.getByRole('radio', { name: '2. Frontend' }));
+    submit();
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('This question was already answered.'));
+  });
+});
