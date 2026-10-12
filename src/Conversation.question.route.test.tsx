@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import type { ComponentType } from 'react';
@@ -22,6 +22,12 @@ import type { MessageType, QuestionView } from './types';
  * exports, and renders the conversation route's real `<Conversation />` at
  * a concrete id: the message list it loads carries a pending question, the
  * form appears, and submitting it posts the answer and re-fetches the list.
+ *
+ * A form left open on a screen goes stale when its question is resolved
+ * elsewhere. The conversation's broadcast (`NewConversationMessageEvent`)
+ * re-fetches the list, which carries the question's new state, and the
+ * form turns read-only without a reload; a submission the server refuses
+ * with 409 shows the question's state and re-fetches the list too.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,8 +43,18 @@ const QUESTION_TEXT =
   'Which part should I change first?\n\n1. Backend\n2. Frontend\n3. Docs\n\n' +
   'Reply with the number of your choice, or answer in your own words.';
 
+const NEW_MESSAGE_EVENT = '.ClarionApp\\LlmClient\\Events\\NewConversationMessageEvent';
+
 let requests: Array<{ url: string; method: string; body: any }> = [];
 let messageListFetches = 0;
+/** The question as the server currently holds it. */
+let serverView: QuestionView;
+/** What `POST question/{id}/answer` returns. */
+let answerResult: () => { data?: any; error?: any };
+/** While set, message-list fetches wait for it, so a test can observe the moment before they land. */
+let listGate: Promise<void> | null = null;
+/** The handlers the screen registered on the conversation's channel, by event name. */
+let echoHandlers: Record<string, (event?: any) => void> = {};
 
 function pendingView(): QuestionView {
   return {
@@ -80,7 +96,7 @@ function messageList(): MessageType[] {
       updated_at: '2026-10-12T08:00:01.000000Z',
       streaming: false,
       responseTime: 0,
-      question: pendingView(),
+      question: serverView,
     } as MessageType,
   ];
 }
@@ -97,13 +113,16 @@ vi.mock('@clarion-app/frontend-base', () => ({
     if (method !== 'GET') {
       requests.push({ url, method, body: args?.body });
       if (url.replace(/^\//, '') === `question/${QUESTION_ID}/answer`) {
-        return { data: { status: 'answered', question: { ...pendingView(), state: 'answered' }, message: null } };
+        return answerResult();
       }
       return { data: {} };
     }
 
     if (url === `/conversation/${CONVERSATION_ID}/message`) {
       messageListFetches++;
+      if (listGate) {
+        await listGate;
+      }
       return { data: messageList() };
     }
     if (url === '/role-assignment') {
@@ -118,8 +137,12 @@ vi.mock('@clarion-app/frontend-base', () => ({
 const pkgIndex: Record<string, any> = await import('./index');
 
 function setupEcho() {
-  const channel: any = { listen: vi.fn() };
-  channel.listen.mockReturnValue(channel);
+  const channel: any = {
+    listen: vi.fn((event: string, handler: (event?: any) => void) => {
+      echoHandlers[event] = handler;
+      return channel;
+    }),
+  };
   (window as any).Echo = {
     private: vi.fn().mockReturnValue(channel),
     leave: vi.fn(),
@@ -151,11 +174,46 @@ function conversationRouteElement(): ComponentType {
   return component;
 }
 
+function answeredByTap(): QuestionView {
+  return {
+    ...pendingView(),
+    state: 'answered',
+    answer: { is_selection: true, selected: [{ number: 2, text: 'Frontend' }], raw_reply: '2', method: 'messaging_option' },
+  };
+}
+
+function renderConversationRoute() {
+  const RouteElement = conversationRouteElement();
+  const store = manifestStore();
+
+  render(
+    <MemoryRouter initialEntries={[`/clarion-app/llm-client/conversations/${CONVERSATION_ID}`]}>
+      <Provider store={store}>
+        <Routes>
+          <Route path={CONVERSATION_ROUTE} element={<RouteElement />} />
+        </Routes>
+      </Provider>
+    </MemoryRouter>,
+  );
+}
+
+function deferred(): { promise: Promise<void>; release: () => void } {
+  let release: () => void = () => {};
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+
 describe('Conversation route — answering a question through the form', () => {
   beforeEach(() => {
     cleanup();
     requests = [];
     messageListFetches = 0;
+    serverView = pendingView();
+    answerResult = () => ({ data: { status: 'answered', question: { ...pendingView(), state: 'answered' }, message: null } });
+    listGate = null;
+    echoHandlers = {};
     setupEcho();
   });
 
@@ -193,5 +251,59 @@ describe('Conversation route — answering a question through the form', () => {
     await waitFor(() => {
       expect(messageListFetches).toBeGreaterThan(fetchesBeforeSubmit);
     });
+  });
+  it.each([
+    ['answered elsewhere', answeredByTap, 'Answered: 2. Frontend (from Telegram)'],
+    ['expired', (): QuestionView => ({ ...pendingView(), state: 'expired' }), 'Expired — no longer awaiting a reply.'],
+  ])('an open form turns read-only without a reload when the question is %s', async (_label, resolved, outcome) => {
+    renderConversationRoute();
+    await screen.findByRole('group', { name: 'Which part should I change first?' });
+    expect(screen.getByRole('button', { name: 'Submit answer' })).toBeInTheDocument();
+    expect(echoHandlers[NEW_MESSAGE_EVENT], 'the screen listens for the conversation\'s new-message broadcast').toBeDefined();
+    const fetchesBefore = messageListFetches;
+
+    // Resolved on another device, in Telegram, or by expiry: the server
+    // broadcasts on the conversation's channel.
+    serverView = resolved();
+    act(() => {
+      echoHandlers[NEW_MESSAGE_EVENT]({ conversation_id: CONVERSATION_ID, message_id: 'msg-question' });
+    });
+
+    expect(await screen.findByText(outcome)).toBeInTheDocument();
+    expect(messageListFetches).toBeGreaterThan(fetchesBefore);
+    expect(screen.queryByRole('button', { name: 'Submit answer' }), 'nothing left to submit').toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.getByText('2. Frontend'), 'the question and its choices stay readable').toBeInTheDocument();
+    expect(requests, 'nothing was sent').toHaveLength(0);
+  });
+
+  it('a submission refused because the question already resolved shows its state and re-fetches the list', async () => {
+    renderConversationRoute();
+    await screen.findByRole('group', { name: 'Which part should I change first?' });
+
+    // The question was answered from Telegram; this screen has not heard yet.
+    serverView = answeredByTap();
+    answerResult = () => ({
+      error: { status: 409, data: { code: 'question_not_pending', state: 'answered', question: answeredByTap() } },
+    });
+    const gate = deferred();
+    listGate = gate.promise;
+    const fetchesBefore = messageListFetches;
+
+    fireEvent.click(screen.getByRole('radio', { name: '3. Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit answer' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('This question was already answered.');
+    await waitFor(() => {
+      expect(messageListFetches, 'the refusal re-fetches the message list').toBeGreaterThan(fetchesBefore);
+    });
+    expect(requests.filter((r) => r.url.replace(/^\//, '') === `question/${QUESTION_ID}/answer`)).toHaveLength(1);
+
+    // The re-fetched list lands: the form shows the outcome it lost to.
+    await act(async () => {
+      gate.release();
+    });
+    expect(await screen.findByText('Answered: 2. Frontend (from Telegram)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).toBeNull();
   });
 });
