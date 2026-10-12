@@ -243,6 +243,8 @@ interface ActionContainerProps {
   delegationsByActionId: Record<string, Delegation>;
   /** Navigates the diagram to a delegation's own helper_run_id (US3). */
   onOpenDelegation: (helperRunId: string) => void;
+  /** The run summary's `question_stopped`: the run's work has stopped on an unanswered question. */
+  questionStopped: boolean;
 }
 
 /** One action node plus its own lazily-fetched (or auto-expanded) children — recursable for nested actions (FR-002). */
@@ -255,6 +257,7 @@ function ActionContainer({
   onSelect,
   delegationsByActionId,
   onOpenDelegation,
+  questionStopped,
 }: ActionContainerProps): React.ReactElement {
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const isExpanded = action.has_children && (autoExpand || manuallyExpanded);
@@ -281,6 +284,7 @@ function ActionContainer({
       onSelect={() => onSelect({ type: 'action', actionId: action.id })}
       delegation={delegationsByActionId[action.id]}
       onOpenDelegation={onOpenDelegation}
+      questionStopped={questionStopped}
     >
       {isExpanded && (
         <>
@@ -295,6 +299,7 @@ function ActionContainer({
                 onSelect={onSelect}
                 delegationsByActionId={delegationsByActionId}
                 onOpenDelegation={onOpenDelegation}
+                questionStopped={questionStopped}
               />
             </VirtualRow>
           ))}
@@ -319,6 +324,8 @@ interface StepContainerProps {
   delegationsByActionId: Record<string, Delegation>;
   /** Navigates the diagram to a delegation's own helper_run_id (US3). */
   onOpenDelegation: (helperRunId: string) => void;
+  /** The run summary's `question_stopped`: the run's work has stopped on an unanswered question. */
+  questionStopped: boolean;
 }
 
 /** One step node plus its own lazily-fetched (or auto-expanded) top-level actions. */
@@ -330,6 +337,7 @@ function StepContainer({
   onSelect,
   delegationsByActionId,
   onOpenDelegation,
+  questionStopped,
 }: StepContainerProps): React.ReactElement {
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const isExpanded = autoExpand || manuallyExpanded;
@@ -367,6 +375,7 @@ function StepContainer({
                 onSelect={onSelect}
                 delegationsByActionId={delegationsByActionId}
                 onOpenDelegation={onOpenDelegation}
+                questionStopped={questionStopped}
               />
             </VirtualRow>
           ))}
@@ -489,7 +498,14 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
         >
           {runStatusLabel(run)}
         </span>
-        {run.awaiting_user === true && (
+        {run.question_stopped === true ? (
+          <span
+            data-testid="run-question-stopped-badge"
+            className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800"
+          >
+            Stopped — waiting for your answer
+          </span>
+        ) : run.awaiting_user === true && (
           <span
             data-testid="run-awaiting-user-badge"
             className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
@@ -524,6 +540,7 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
                   onSelect={setSelected}
                   delegationsByActionId={delegationsByActionId}
                   onOpenDelegation={handleOpenDelegation}
+                  questionStopped={run.question_stopped === true}
                 />
               </VirtualRow>
             ))}

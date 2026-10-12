@@ -187,8 +187,10 @@ export interface RunSummary {
   step_count: number;
   action_count: number;
   conversation_id: string | null;
-  /** True exactly while a question to the user is pending for this run. */
+  /** True while a question to the user is waiting for this run (pending, or stopped awaiting a late answer). */
   awaiting_user?: boolean;
+  /** True while this run's work has stopped on a question that went unanswered. */
+  question_stopped?: boolean;
 }
 
 export interface StepSummary {

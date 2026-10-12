@@ -19,6 +19,12 @@ import type { RunSummary, StepSummary, ActionSummary } from './types';
  * is false or missing. An `ask_user` action still `awaiting_confirmation` is
  * labelled "Waiting for your answer"; every other action keeps its existing
  * "Awaiting confirmation" label.
+ *
+ * A run whose question expired under the stop policy is still waiting on
+ * its user, but its work has stopped: the summary's `question_stopped` flag
+ * shows a "Stopped — waiting for your answer" badge,
+ * data-testid="run-question-stopped-badge", instead of "Waiting for you",
+ * and the waiting `ask_user` action is labelled "Expired — work stopped".
  */
 
 vi.mock('./config', () => ({
@@ -158,6 +164,10 @@ function makeAction(overrides: Partial<ActionSummary> = {}): ActionSummary {
 
 type RunSummaryWithFlag = RunSummary & { awaiting_user?: boolean };
 
+// `question_stopped` is not yet part of RunSummary; the cast-free extension
+// keeps this file compiling either way.
+type RunSummaryWithStop = RunSummaryWithFlag & { question_stopped?: boolean };
+
 function withAwaitingUser(run: RunSummary, awaitingUser: boolean | undefined): RunSummaryWithFlag {
   const flagged: RunSummaryWithFlag = { ...run };
   if (awaitingUser !== undefined) flagged.awaiting_user = awaitingUser;
@@ -268,6 +278,73 @@ describe('RunDiagram — a run waiting on its user', () => {
     renderDiagram('run-1');
 
     await screen.findByTestId('run-status-badge');
+    expect(screen.queryByTestId('run-awaiting-user-badge')).toBeNull();
+  });
+});
+
+describe('RunDiagram — a run stopped on its question', () => {
+  beforeEach(() => {
+    mockRun = null;
+    mockSteps = [];
+    mockActionsByStep = {};
+    mockChildrenByAction = {};
+  });
+
+  function seedRun(flags: { awaiting_user?: boolean; question_stopped?: boolean }) {
+    const run: RunSummaryWithStop = {
+      ...makeRun({ end_state: 'in_progress', ended_at: null, duration_ms: null, step_count: 1, action_count: 1 }),
+      ...flags,
+    };
+    mockRun = run;
+    mockSteps = [makeStep({ id: 'step-1', end_state: 'in_progress', ended_at: null, duration_ms: null, action_count: 1 })];
+    mockActionsByStep['step-1'] = [waitingAsk()];
+  }
+
+  it('shows "Stopped — waiting for your answer" instead of "Waiting for you"', async () => {
+    seedRun({ awaiting_user: true, question_stopped: true });
+
+    renderDiagram('run-1');
+
+    const badge = await screen.findByTestId('run-question-stopped-badge');
+    expect(badge.textContent).toBe('Stopped — waiting for your answer');
+    expect(screen.queryByTestId('run-awaiting-user-badge')).toBeNull();
+    expect(screen.queryByText(/Waiting for you\b/)).toBeNull();
+    expect(screen.getByTestId('run-status-badge').textContent ?? '').not.toMatch(/fail|abandon|stall|complete/i);
+  });
+
+  it('labels the stopped run\'s waiting ask_user action "Expired — work stopped"', async () => {
+    seedRun({ awaiting_user: true, question_stopped: true });
+
+    renderDiagram('run-1');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('run-action-action-ask').textContent ?? '').toContain('Expired — work stopped');
+    });
+    expect(screen.getByTestId('run-action-action-ask').textContent ?? '').not.toContain('Waiting for your answer');
+  });
+
+  it('keeps "Waiting for you" for a run whose question is still pending', async () => {
+    seedRun({ awaiting_user: true, question_stopped: false });
+
+    renderDiagram('run-1');
+
+    const badge = await screen.findByTestId('run-awaiting-user-badge');
+    expect(badge.textContent ?? '').toContain('Waiting for you');
+    expect(screen.queryByTestId('run-question-stopped-badge')).toBeNull();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('run-action-action-ask').textContent ?? '').toContain('Waiting for your answer');
+    });
+    expect(screen.getByTestId('run-action-action-ask').textContent ?? '').not.toContain('Expired');
+  });
+
+  it('shows neither badge when the run waits on nothing', async () => {
+    seedRun({ awaiting_user: false, question_stopped: false });
+
+    renderDiagram('run-1');
+
+    await screen.findByTestId('run-status-badge');
+    expect(screen.queryByTestId('run-question-stopped-badge')).toBeNull();
     expect(screen.queryByTestId('run-awaiting-user-badge')).toBeNull();
   });
 });
