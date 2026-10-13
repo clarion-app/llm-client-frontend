@@ -35,7 +35,7 @@ export const messageApi = createApi({
             }),
             invalidatesTags: (_result, _error, { id }) => [{ type: 'Message', id }],
         }),
-        createMessage: builder.mutation<MessageType, Partial<MessageType>>({
+        createMessage: builder.mutation<MessageType, Partial<MessageType> & { task_budget?: { max_steps?: number; max_spend?: string } }>({
             query: (newMessage) => ({
                 url: 'message',
                 method: 'POST',

@@ -252,12 +252,119 @@ function PendingQuestion({ question }: QuestionFormProps) {
   );
 }
 
+/** A decimal string trimmed to at least two places ("1.0000000000" → "1.00"). */
+function allowanceAmount(value: string | null | undefined): string {
+  if (!value) {
+    return "";
+  }
+  const [whole, fraction = ""] = value.split(".");
+  const trimmed = fraction.replace(/0+$/, "");
+  return `${whole}.${trimmed.padEnd(2, "0")}`;
+}
+
+// The prompt raised when a task reaches its budget ceiling: its three
+// decisions, the task's standing, and for continue the allowance to add.
+function TaskBudgetPrompt({ question }: QuestionFormProps) {
+  const baseId = useId();
+  const headingId = `${baseId}-question`;
+  const [answerQuestion, { isLoading }] = useAnswerQuestionMutation();
+  const reached = question.reached ?? [];
+  const offeredSteps = reached.includes("steps") && question.offered_allowance?.steps != null ? String(question.offered_allowance.steps) : "";
+  const offeredSpend = reached.includes("spend") ? allowanceAmount(question.offered_allowance?.spend) : "";
+  const [selected, setSelected] = useState<number | null>(null);
+  const [steps, setSteps] = useState(offeredSteps);
+  const [spend, setSpend] = useState(offeredSpend);
+  const [feedback, setFeedback] = useState<Feedback>(null);
+  const outcome = question.state !== "pending" && question.outcome_text ? question.outcome_text : null;
+  const statement = question.state === "pending" && question.expiry_statement ? question.expiry_statement : null;
+
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isLoading) {
+      return;
+    }
+    if (selected === null) {
+      setFeedback({ role: "alert", text: "Choose what should happen next." });
+      return;
+    }
+    const edited = selected === 1 && (steps.trim() !== offeredSteps || spend.trim() !== offeredSpend);
+    const args = edited
+      ? {
+          questionId: question.id,
+          text: ["continue", steps.trim() !== "" ? `steps=${steps.trim()}` : null, spend.trim() !== "" ? `spend=${spend.trim()}` : null]
+            .filter((part) => part !== null)
+            .join(" "),
+        }
+      : { questionId: question.id, selected: [selected] };
+    setFeedback(null);
+    try {
+      await answerQuestion(args).unwrap();
+    } catch (error: unknown) {
+      const failure = error as { status?: unknown; data?: { message?: unknown; question?: { outcome_text?: unknown } | null } };
+      const serverText = failure?.data?.question?.outcome_text ?? failure?.data?.message;
+      setFeedback(
+        typeof serverText === "string" && serverText.trim() !== ""
+          ? { role: failure?.status === 409 ? "status" : "alert", text: serverText }
+          : { role: "alert", text: SEND_FAILED },
+      );
+    }
+  };
+
+  return (
+    <form className="agent-question" aria-labelledby={headingId} onSubmit={onSubmit} noValidate>
+      {question.preamble && <p className="whitespace-pre-wrap mb-2">{question.preamble}</p>}
+      {question.standing?.label && <p className="mb-2">{question.standing.label}</p>}
+      {outcome && (
+        <p role={feedback?.role === "status" ? undefined : "status"} className="mb-2 italic">
+          {outcome}
+        </p>
+      )}
+      <fieldset>
+        <legend id={headingId} className="whitespace-pre-wrap font-semibold">{question.question}</legend>
+        {question.choices.map((choice) => (
+          <label key={choice.number} className="block">
+            <input
+              type="radio"
+              className="mr-2"
+              name={`question-${question.id}`}
+              checked={selected === choice.number}
+              disabled={isLoading}
+              onChange={() => setSelected(choice.number)}
+            />
+            {choiceLabel(choice)}
+          </label>
+        ))}
+      </fieldset>
+      {selected === 1 && (
+        <div className="mt-2">
+          <label htmlFor={`${baseId}-steps`} className="block">Additional steps</label>
+          <input id={`${baseId}-steps`} type="number" min={1} value={steps} disabled={isLoading} onChange={(e) => setSteps(e.target.value)} className="border rounded p-1" />
+          <label htmlFor={`${baseId}-spend`} className="block">Additional spend{question.standing ? ` (${question.standing.spend.currency})` : ""}</label>
+          <input id={`${baseId}-spend`} type="text" inputMode="decimal" value={spend} disabled={isLoading} onChange={(e) => setSpend(e.target.value)} className="border rounded p-1" />
+        </div>
+      )}
+      {statement && <p className="mt-2 whitespace-pre-wrap">{statement}</p>}
+      {feedback && (
+        <p role={feedback.role} className={feedback.role === "alert" ? "mt-2 text-red-600" : "mt-2"}>
+          {feedback.text}
+        </p>
+      )}
+      <button type="submit" className="mt-2 px-3 py-1 border rounded" disabled={isLoading}>
+        Submit answer
+      </button>
+    </form>
+  );
+}
+
 export function QuestionForm({ question }: QuestionFormProps) {
   // An older server sends no `answerable`: only a pending question took an
   // answer there.
   const answerable = question.answerable ?? question.state === "pending";
   if (!answerable) {
     return <ResolvedQuestion question={question} />;
+  }
+  if (question.kind === "task_budget") {
+    return <TaskBudgetPrompt question={question} />;
   }
   return <PendingQuestion question={question} />;
 }

@@ -71,6 +71,80 @@ export interface QuestionView {
   outcome_text?: string | null;
   stopped_at?: string | null;
   answered_late?: boolean;
+  // Whose question it is: the agent's own, or the prompt raised when a
+  // task reaches its budget ceiling (older servers send neither).
+  kind?: 'agent' | 'task_budget';
+  // For a task budget prompt: what continuing would add to each reached
+  // ceiling, which ceilings were reached, and the task's standing.
+  offered_allowance?: { steps: number | null; spend: string | null };
+  reached?: Array<'steps' | 'spend'>;
+  standing?: TaskBudgetStanding;
+}
+
+export type TaskBudgetState = 'running' | 'paused' | 'concluded' | 'completed' | 'halted' | 'ended';
+
+export type TaskBudgetSubState = 'awaiting_decision' | 'stopped' | null;
+
+export type CeilingOrigin = 'default' | 'user' | 'user_reduced_to_maximum';
+
+// A task's budget as the server holds it now.
+export interface TaskBudgetStanding {
+  task_budget_id: string;
+  conversation_id: string;
+  state: TaskBudgetState;
+  sub_state: TaskBudgetSubState;
+  steps: { used: number; ceiling: number; origin: CeilingOrigin; maximum: number; approach_noticed: boolean };
+  spend: {
+    used: string;
+    ceiling: string;
+    currency: string;
+    origin: CeilingOrigin;
+    maximum: string;
+    approximate: boolean;
+    incomplete: boolean;
+    unpriced_request_count: number;
+    approach_noticed: boolean;
+  };
+  approach_threshold: string;
+  reached: Array<'steps' | 'spend'>;
+  prompt_question_id: string | null;
+  label: string;
+}
+
+export type TaskBudgetResponse = TaskBudgetStanding | { task_budget: null };
+
+export interface TaskBudgetChange {
+  conversationId: string;
+  max_steps?: number;
+  max_spend?: string;
+}
+
+export type TaskBudgetChangeResult = TaskBudgetStanding & { reduced: { steps: boolean; spend: boolean } };
+
+export interface TaskBudgetEvent {
+  id: string;
+  kind: string;
+  payload: Record<string, unknown>;
+  actor_user_id: string | null;
+  created_at: string;
+}
+
+export interface RunTaskBudgetRecord {
+  standing: TaskBudgetStanding | null;
+  events: TaskBudgetEvent[];
+}
+
+// The task budget a run summary carries for its task.
+export interface RunTaskBudget {
+  state: TaskBudgetState;
+  sub_state: TaskBudgetSubState;
+  steps_used: number;
+  max_steps: number;
+  spend_used: string;
+  max_spend: string;
+  currency: string;
+  approximate: boolean;
+  incomplete: boolean;
 }
 
 export interface ConversationType extends LaravelModelType {
@@ -191,6 +265,8 @@ export interface RunSummary {
   awaiting_user?: boolean;
   /** True while this run's work has stopped on a question that went unanswered. */
   question_stopped?: boolean;
+  /** The task whose root or paused run this is; null when none (absent from older servers). */
+  task_budget?: RunTaskBudget | null;
 }
 
 export interface StepSummary {
@@ -527,6 +603,9 @@ export interface Delegation {
   /** 101-parallel-subagent-execution: null for a solo delegation, shared
    *  by every member of the same concurrent batch otherwise. */
   batch_id: string | null;
+  result_status?: string | null;
+  /** Why the helper's result is what it is, e.g. `task_budget` when the task's budget stopped it. */
+  result_reason?: string | null;
 }
 
 // Multi-agent arrangement types (106-multi-agent-run-view, data-model.md

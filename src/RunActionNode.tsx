@@ -48,7 +48,10 @@ function isAssumedAsk(action: ActionSummary): boolean {
   return action.target === 'ask_user' && action.outcome === 'failure' && action.failure_reason === EXPIRED_ASSUMED_REASON;
 }
 
-function actionStatusLabel(action: ActionSummary, questionStopped: boolean): string {
+function actionStatusLabel(action: ActionSummary, questionStopped: boolean, delegation?: Delegation): string {
+  if (action.action_type === 'delegation' && delegation?.result_reason === 'task_budget') {
+    return 'Stopped by task budget';
+  }
   switch (action.outcome) {
     case 'in_progress':
       return 'Running';
@@ -116,7 +119,7 @@ export function RunActionNode({
         <span className="text-xs uppercase text-gray-500">{action.action_type}</span>
         <span className="font-medium">{action.target ?? '(no target)'}</span>
         <span className={isFailed ? 'text-red-700' : isRunning ? 'text-blue-700' : 'text-green-700'}>
-          {actionStatusLabel(action, questionStopped)}
+          {actionStatusLabel(action, questionStopped, delegation)}
         </span>
         {overlap && (
           <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-800">

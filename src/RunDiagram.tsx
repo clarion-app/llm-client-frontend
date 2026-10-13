@@ -10,6 +10,8 @@ import {
   useLazyGetActionChildrenQuery,
 } from './runApi';
 import { useGetDelegationsForRunQuery } from './delegationApi';
+import { useGetRunTaskBudgetQuery } from './conversationApi';
+import { RunTaskBudgetBadge, taskBudgetBadge } from './RunTaskBudgetBadge';
 import { RunStepNode } from './RunStepNode';
 import { RunActionNode } from './RunActionNode';
 import { RunElementDetail } from './RunElementDetail';
@@ -498,7 +500,9 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
         >
           {runStatusLabel(run)}
         </span>
-        {run.question_stopped === true ? (
+        {taskBudgetBadge(run) !== null ? (
+          <RunTaskBudgetBadge run={run} />
+        ) : run.question_stopped === true ? (
           <span
             data-testid="run-question-stopped-badge"
             className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800"
@@ -524,6 +528,8 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
           </button>
         )}
       </div>
+
+      {run.task_budget && <RunTaskBudgetSection runId={runId} />}
 
       {steps.length === 0 ? (
         <div data-testid="run-diagram-empty">This run has no steps recorded yet.</div>
@@ -551,6 +557,49 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const EVENT_LABELS: Record<string, string> = {
+  opened: 'Opened',
+  ceiling_changed: 'Ceiling changed',
+  approach_notice: 'Approach notice',
+  ceiling_reached: 'Ceiling reached',
+  prompt_raised: 'Prompt raised',
+  decision: 'Decision',
+  prompt_stopped: 'Prompt stopped',
+  prompt_withdrawn: 'Prompt withdrawn',
+  allowance_granted: 'Allowance granted',
+  report: 'Report',
+  halted: 'Halted',
+  ended: 'Ended',
+};
+
+function RunTaskBudgetRecord({ runId }: { runId: string }): React.ReactElement {
+  const { data } = useGetRunTaskBudgetQuery(runId);
+  return (
+    <div>
+      {data?.standing?.label && <p className="text-sm">{data.standing.label}</p>}
+      <ol className="text-sm">
+        {(data?.events ?? []).map((event) => (
+          <li key={event.id}>
+            {EVENT_LABELS[event.kind] ?? event.kind} <span className="text-gray-500">{event.created_at}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function RunTaskBudgetSection({ runId }: { runId: string }): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-testid="run-task-budget-section" className="mb-3">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="font-semibold">
+        Task budget
+      </button>
+      {open && <RunTaskBudgetRecord runId={runId} />}
     </div>
   );
 }
