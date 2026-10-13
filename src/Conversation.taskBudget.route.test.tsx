@@ -94,8 +94,11 @@ vi.mock('@clarion-app/frontend-base', () => ({
 
 const pkgIndex: Record<string, any> = await import('./index');
 
+let echoChannel: any;
+
 function setupEcho() {
   const channel: any = { listen: vi.fn(() => channel) };
+  echoChannel = channel;
   (window as any).Echo = {
     private: vi.fn().mockReturnValue(channel),
     leave: vi.fn(),
@@ -204,6 +207,54 @@ describe('Conversation route — the task budget', () => {
 
     await waitFor(() => expect(sentMessages()).toHaveLength(1));
     expect(sentMessages()[0].body).not.toHaveProperty('task_budget');
+  });
+
+  it('does not send the limits of one request again with the next message', async () => {
+    renderConversationRoute();
+    await screen.findByText(LABEL);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limits' }));
+    fireEvent.change(screen.getByLabelText('Step limit'), { target: { value: '5' } });
+    send('Tidy up the project.');
+    await waitFor(() => expect(sentMessages()).toHaveLength(1));
+    await waitFor(() => expect(composer().value).toBe(''));
+
+    // The disclosure is closed, so a limit kept from the last send would be
+    // sent unseen.
+    fireEvent.click(screen.getByRole('button', { name: 'Limits' }));
+    send('And now the docs.');
+
+    await waitFor(() => expect(sentMessages()).toHaveLength(2));
+    expect(sentMessages()[0].body.task_budget).toStrictEqual({ max_steps: 5 });
+    expect(sentMessages()[1].body).not.toHaveProperty('task_budget');
+  });
+
+  it('keeps the limits when the send was refused, so sending again states them again', async () => {
+    messageResult = () => ({ error: { status: 409, data: { code: 'processing', message: 'busy' } } });
+    renderConversationRoute();
+    await screen.findByText(LABEL);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limits' }));
+    fireEvent.change(screen.getByLabelText('Step limit'), { target: { value: '5' } });
+    send('Tidy up the project.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('busy');
+
+    expect((screen.getByLabelText('Step limit') as HTMLInputElement).value).toBe('5');
+  });
+
+  it('reads the standing again when a message event arrives', async () => {
+    renderConversationRoute();
+    await screen.findByText(LABEL);
+    const reads = () => requests.filter((r) => r.method === 'GET' && r.url === `/conversation/${CONVERSATION_ID}/task-budget`).length;
+    const before = reads();
+
+    const listener = (event: string) => echoChannel.listen.mock.calls.find((call: any[]) => String(call[0]).endsWith(event))?.[1];
+    expect(listener('NewConversationMessageEvent')).toBeDefined();
+    listener('NewConversationMessageEvent')();
+    await waitFor(() => expect(reads()).toBe(before + 1));
+
+    listener('FinishOpenAIConversationResponseEvent')();
+    await waitFor(() => expect(reads()).toBe(before + 2));
   });
 
   it('shows the guidance of a refused decision inline and keeps the text typed', async () => {

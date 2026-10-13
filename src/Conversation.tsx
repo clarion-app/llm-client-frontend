@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import {
+  conversationApi,
   useGetConversationsQuery,
   useDeleteConversationMutation,
   useCreateConversationMutation,
@@ -80,6 +82,16 @@ const Conversation = (props: ConversationPropsType) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const refetchRef = useRef(refetch);
   const updateMessageLocallyRef = useRef(updateMessageLocally);
+  const dispatch = useDispatch();
+  // A message event (a reply finished, a notice or prompt posted) can mean
+  // the task's budget moved: its standing is read again then, as well as on
+  // the panel's own polling while the conversation works.
+  const refreshTaskBudgetRef = useRef<() => void>(() => {});
+  refreshTaskBudgetRef.current = () => {
+    if (conversationId) {
+      dispatch(conversationApi.util.invalidateTags([{ type: "TaskBudget", id: conversationId }]));
+    }
+  };
 
   useEffect(() => { refetchRef.current = refetch; }, [refetch]);
   useEffect(() => { updateMessageLocallyRef.current = updateMessageLocally; }, [updateMessageLocally]);
@@ -119,6 +131,7 @@ const Conversation = (props: ConversationPropsType) => {
         ".ClarionApp\\LlmClient\\Events\\FinishOpenAIConversationResponseEvent",
         () => {
           refetchRef.current();
+          refreshTaskBudgetRef.current();
           scrollToBottom();
         }
       )
@@ -126,6 +139,7 @@ const Conversation = (props: ConversationPropsType) => {
         ".ClarionApp\\LlmClient\\Events\\NewConversationMessageEvent",
         () => {
           refetchRef.current();
+          refreshTaskBudgetRef.current();
           scrollToBottom();
         }
       )
@@ -205,6 +219,10 @@ const Conversation = (props: ConversationPropsType) => {
       }
     }
     setNewMessage("");
+    // Limits belong to the request they were sent with: the next message
+    // starts with none unless the user states them again.
+    setStepLimit("");
+    setSpendLimit("");
   };
 
   const generateTitle = async () => {
