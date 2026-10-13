@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGetRunsQuery } from './runApi';
 import type { RunSummary } from './types';
+import { RunTaskBudgetBadge, taskBudgetBadge } from './RunTaskBudgetBadge';
 
 /**
  * RunsList — the entry point for finding a run with no visible triggering
@@ -82,7 +83,9 @@ export function RunsList(): React.ReactElement {
             <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium">
               {runStatusLabel(run.end_state)}
             </span>
-            {run.question_stopped === true && (
+            {taskBudgetBadge(run) !== null ? (
+              <RunTaskBudgetBadge run={run} />
+            ) : run.question_stopped === true && (
               <span
                 data-testid="run-question-stopped-badge"
                 className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800"

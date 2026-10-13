@@ -33,6 +33,14 @@ function isAgentQuestionMessage(toolData: unknown): boolean {
   return toolDataKind(toolData)?.startsWith('agent_question') ?? false;
 }
 
+// The task budget's own notices and reports are plain text too.
+const TASK_BUDGET_KINDS = ['task_budget_notice', 'task_budget_report'];
+
+function isTaskBudgetMessage(toolData: unknown): boolean {
+  const kind = toolDataKind(toolData);
+  return kind !== null && TASK_BUDGET_KINDS.includes(kind);
+}
+
 const Message = (props: MessagePropsType) => {
   const [showRaw, setShowRaw] = useState(false);
 
@@ -65,7 +73,7 @@ const Message = (props: MessagePropsType) => {
   const questionForm = toolDataKind(props.tool_data) === 'agent_question' && props.question
     ? <QuestionForm question={props.question} />
     : null;
-  const plainText = isAgentQuestionMessage(props.tool_data);
+  const plainText = isAgentQuestionMessage(props.tool_data) || isTaskBudgetMessage(props.tool_data);
   const content = props.content.replace(/```/g, "\n```");
   return (
     <div className="px-4 py-2 message m-4">

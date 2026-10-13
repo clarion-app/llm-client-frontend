@@ -20,6 +20,7 @@ import ApiCallConfirmation from "./ApiCallConfirmation";
 import { WindowWS } from "@clarion-app/types";
 import { useRef } from "react";
 import { errorLog } from "./logger";
+import { TaskBudgetPanel } from "./TaskBudgetPanel";
 
 interface ConversationPropsType {
   conversation_id?: string;
@@ -69,6 +70,10 @@ const Conversation = (props: ConversationPropsType) => {
   const [updateMessageLocally] = useUpdateMessageLocallyMutation();
   const [deleteConversation] = useDeleteConversationMutation();
   const [pendingConfirmation, setPendingConfirmation] = useState<ApiCallConfirmationType | null>(null);
+  const [limitsOpen, setLimitsOpen] = useState(false);
+  const [stepLimit, setStepLimit] = useState("");
+  const [spendLimit, setSpendLimit] = useState("");
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const win = window as unknown as WindowWS;
 
@@ -172,6 +177,10 @@ const Conversation = (props: ConversationPropsType) => {
       return;
     }
 
+    // Only the limits the user filled in are sent; none sends no task_budget.
+    const taskBudget: { max_steps?: number; max_spend?: string } = {};
+    if (stepLimit.trim() !== "") taskBudget.max_steps = Number(stepLimit);
+    if (spendLimit.trim() !== "") taskBudget.max_spend = spendLimit.trim();
     const message = {
       conversation_id: updateConversationId,
       content: newMessage,
@@ -179,10 +188,21 @@ const Conversation = (props: ConversationPropsType) => {
       user: backend.user.name,
       streaming: true,
       responseTime: 0,
+      ...(Object.keys(taskBudget).length > 0 ? { task_budget: taskBudget } : {}),
     };
 
+    setSendError(null);
     const createdMessage = await createMessage(message);
     if (!createdMessage) return;
+    // A refused send (e.g. a ceiling decision is still required) keeps the
+    // typed text and shows the server's guidance.
+    if ("error" in createdMessage && createdMessage.error) {
+      const failure = createdMessage.error as { status?: unknown; data?: { message?: unknown } };
+      if (failure.status === 422 && typeof failure.data?.message === "string") {
+        setSendError(failure.data.message);
+        return;
+      }
+    }
     setNewMessage("");
   };
 
@@ -236,6 +256,12 @@ const Conversation = (props: ConversationPropsType) => {
           </button>
         </div>
       )}
+      {conversationId && (
+        <TaskBudgetPanel
+          conversationId={conversationId}
+          processing={messages?.some((m: MessageType) => m.streaming) ?? false}
+        />
+      )}
       {messagesLoading && <p>Loading messages...</p>}
       {messagesError && (() => {
         const errStatus = hasNumericStatus(messagesErrorData) ? messagesErrorData.status : undefined;
@@ -257,6 +283,18 @@ const Conversation = (props: ConversationPropsType) => {
       </div>
       {pendingConfirmation && (
         <ApiCallConfirmation {...pendingConfirmation} />
+      )}
+      {sendError && <p role="alert" className="text-red-600">{sendError}</p>}
+      <button type="button" aria-expanded={limitsOpen} onClick={() => setLimitsOpen(!limitsOpen)} className="text-sm underline">
+        Limits
+      </button>
+      {limitsOpen && (
+        <div className="mb-2">
+          <label htmlFor="conversation-step-limit" className="mr-1">Step limit</label>
+          <input id="conversation-step-limit" type="number" min={1} value={stepLimit} onChange={(e) => setStepLimit(e.target.value)} className="border rounded p-1 mr-2" />
+          <label htmlFor="conversation-spend-limit" className="mr-1">Spend limit</label>
+          <input id="conversation-spend-limit" type="text" inputMode="decimal" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} className="border rounded p-1" />
+        </div>
       )}
       <textarea
         className="w-full h-full border-2 border-gray-300 rounded-lg p-4"

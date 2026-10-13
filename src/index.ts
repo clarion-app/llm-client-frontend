@@ -1,5 +1,6 @@
 import { conversationApi as llmClientConversationApi } from "./conversationApi";
-import { useConfirmApiCallMutation } from "./conversationApi";
+import { useConfirmApiCallMutation, useGetTaskBudgetQuery, useUpdateTaskBudgetMutation, useGetRunTaskBudgetQuery } from "./conversationApi";
+import { TaskBudgetPanel } from "./TaskBudgetPanel";
 import { serverApi as llmClientServerApi } from "./serverApi";
 import { modelApi as llmClientModelApi } from "./modelApi";
 import { messageApi as llmClientMessageApi } from "./messageApi";
@@ -33,7 +34,7 @@ import { WorkspaceChangeHistory } from "./WorkspaceChangeHistory";
 
 export { backend, updateFrontend } from './config';
 
-export { llmClientConversationApi, llmClientServerApi, llmClientModelApi, llmClientMessageApi, llmClientRoleAssignmentApi, llmClientServerStatusApi, llmClientRunApi, llmClientEvalDashboardApi, llmClientAgentBrowserApi, llmClientAgentShareApi, llmClientAgentHelperApi, llmClientDelegationApi, llmClientCapabilityOfferingApi, llmClientMcpClientServerApi, llmClientWorkspaceApi, useConfirmApiCallMutation, ApiCallConfirmation, Conversation, Conversations, ModelSetup, ModelSetupRedirect, RunDiagram, RunsList, RunArrangement, EvalDashboard, EvalRunBreakdown, EvalCaseDetail, AgentBrowser, ManageCapabilityOfferingsPanel, McpServerManagement, WorkspaceBrowser, WorkspaceChangeHistory };
+export { llmClientConversationApi, llmClientServerApi, llmClientModelApi, llmClientMessageApi, llmClientRoleAssignmentApi, llmClientServerStatusApi, llmClientRunApi, llmClientEvalDashboardApi, llmClientAgentBrowserApi, llmClientAgentShareApi, llmClientAgentHelperApi, llmClientDelegationApi, llmClientCapabilityOfferingApi, llmClientMcpClientServerApi, llmClientWorkspaceApi, useConfirmApiCallMutation, useGetTaskBudgetQuery, useUpdateTaskBudgetMutation, useGetRunTaskBudgetQuery, TaskBudgetPanel, ApiCallConfirmation, Conversation, Conversations, ModelSetup, ModelSetupRedirect, RunDiagram, RunsList, RunArrangement, EvalDashboard, EvalRunBreakdown, EvalCaseDetail, AgentBrowser, ManageCapabilityOfferingsPanel, McpServerManagement, WorkspaceBrowser, WorkspaceChangeHistory };
 
 // Side-effect import: registers handler for ServerModelsRefreshed broadcasts
 import './serverStatusRealtime';

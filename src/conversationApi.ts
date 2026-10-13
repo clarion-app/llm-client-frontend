@@ -1,12 +1,12 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { createBaseQuery } from '@clarion-app/frontend-base';
 import { backend } from './config';
-import { ConversationType } from './types';
+import { ConversationType, RunTaskBudgetRecord, TaskBudgetChange, TaskBudgetChangeResult, TaskBudgetResponse } from './types';
 
 export const conversationApi = createApi({
   reducerPath: 'llm-client-conversationApi',
   baseQuery: createBaseQuery({ routePrefix: '/api/clarion-app/llm-client', backendConfig: backend }),
-  tagTypes: ['Conversation'],
+  tagTypes: ['Conversation', 'TaskBudget'],
   endpoints: (builder) => ({
     getConversations: builder.query({
       query: () => `/conversation`,
@@ -55,8 +55,29 @@ export const conversationApi = createApi({
       }),
       invalidatesTags: ['Conversation'],
     }),
+    getTaskBudget: builder.query<TaskBudgetResponse, string>({
+      query: (conversationId) => `/conversation/${conversationId}/task-budget`,
+      providesTags: (_result, _error, conversationId) => [{ type: 'TaskBudget', id: conversationId }],
+    }),
+    updateTaskBudget: builder.mutation<TaskBudgetChangeResult, TaskBudgetChange>({
+      query: ({ conversationId, ...change }) => ({
+        url: `/conversation/${conversationId}/task-budget`,
+        method: 'PATCH',
+        body: change,
+      }),
+      invalidatesTags: (_result, _error, { conversationId }) => [{ type: 'TaskBudget', id: conversationId }],
+    }),
+    getRunTaskBudget: builder.query<RunTaskBudgetRecord, string>({
+      query: (runId) => `/agent-runs/${runId}/task-budget`,
+    }),
   }),
 });
+
+export const {
+  useGetTaskBudgetQuery,
+  useUpdateTaskBudgetMutation,
+  useGetRunTaskBudgetQuery,
+} = conversationApi;
 
 export const {
   useCreateConversationMutation,
