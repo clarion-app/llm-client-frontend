@@ -194,11 +194,12 @@ const Conversation = (props: ConversationPropsType) => {
     setSendError(null);
     const createdMessage = await createMessage(message);
     if (!createdMessage) return;
-    // A refused send (e.g. a ceiling decision is still required) keeps the
-    // typed text and shows the server's guidance.
+    // A refused send (a ceiling decision is still required, or limits were
+    // stated while the conversation is busy) keeps the typed text and shows
+    // the server's reason.
     if ("error" in createdMessage && createdMessage.error) {
       const failure = createdMessage.error as { status?: unknown; data?: { message?: unknown } };
-      if (failure.status === 422 && typeof failure.data?.message === "string") {
+      if ((failure.status === 422 || failure.status === 409) && typeof failure.data?.message === "string") {
         setSendError(failure.data.message);
         return;
       }

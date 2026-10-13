@@ -216,4 +216,16 @@ describe('Conversation route — the task budget', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(GUIDANCE);
     expect(composer().value).toBe('maybe later');
   });
+
+  it('shows why a message stating limits was refused while busy and keeps the text typed', async () => {
+    const BUSY = "This task's budget can only be stated when a request starts, and this conversation is still working on the previous one, so your message was not sent. Send it again once the reply has finished.";
+    messageResult = () => ({ error: { status: 409, data: { code: 'processing', message: BUSY } } });
+    renderConversationRoute();
+    await screen.findByText(LABEL);
+
+    send('/budget steps=5\nTidy up the project.');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('still working on the previous one');
+    expect(composer().value).toBe('/budget steps=5\nTidy up the project.');
+  });
 });
