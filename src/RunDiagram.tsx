@@ -17,6 +17,8 @@ import { RunActionNode } from './RunActionNode';
 import { RunElementDetail } from './RunElementDetail';
 import type { RunElementSelection } from './RunElementDetail';
 import type { RunSummary, StepSummary, ActionSummary, PaginatedEnvelope, Delegation } from './types';
+import { RunProgressPanel } from './RunProgressPanel';
+import { RunResumeTimeline } from './RunResumeTimeline';
 
 /**
  * RunDiagram — orchestrates a run's diagram (US1): fetches the run summary
@@ -530,6 +532,9 @@ export function RunDiagram({ runId: runIdProp }: RunDiagramProps = {}): React.Re
       </div>
 
       {run.task_budget && <RunTaskBudgetSection runId={runId} />}
+
+      <RunProgressPanel runId={runId} />
+      <RunResumeTimeline runId={runId} />
 
       {steps.length === 0 ? (
         <div data-testid="run-diagram-empty">This run has no steps recorded yet.</div>
