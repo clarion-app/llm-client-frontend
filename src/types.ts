@@ -267,6 +267,71 @@ export interface RunSummary {
   question_stopped?: boolean;
   /** The task whose root or paused run this is; null when none (absent from older servers). */
   task_budget?: RunTaskBudget | null;
+  /** What the run's resumability looks like; null for a run that never adopted checkpointing (absent from older servers). */
+  resume?: RunResumeSummary | null;
+}
+
+/** The `resume` block of a run summary. */
+export interface RunResumeSummary {
+  state: string | null;
+  resume_count: number;
+  interrupted_at: string | null;
+  next_attempt_at: string | null;
+  cancelled: boolean;
+}
+
+export type RunProgressState =
+  | 'working'
+  | 'resuming'
+  | 'interrupted'
+  | 'waiting_provider_retry'
+  | 'waiting_on_user'
+  | 'finished'
+  | 'failed'
+  | 'cancelled';
+
+export type RunActivityKind =
+  | 'waiting_for_model'
+  | 'running_tool'
+  | 'waiting_on_helpers'
+  | 'waiting_to_retry'
+  | 'between_steps'
+  | 'none';
+
+/** GET agent-runs/{id}/progress: the derived progress view of a run. There is no percentage in any shape. */
+export interface RunProgress {
+  run_id: string;
+  state: RunProgressState;
+  activity: { kind: RunActivityKind; label?: string };
+  steps_completed: number;
+  /** Present only when the task's structure is known. */
+  structure: { kind: 'stages' | 'parts' | 'helpers'; completed: number; total: number; label: string } | null;
+  /** "unknown" when there is no structure, otherwise null. */
+  remaining: 'unknown' | null;
+  /** The task's allowance; absent when the run has no task. */
+  allowance?: { steps_used: number; max_steps: number; label: string };
+  started_at: string | null;
+  elapsed_ms: number | null;
+  last_progress_at: string | null;
+  resume_count: number;
+  interrupted_at: string | null;
+  next_attempt_at: string | null;
+}
+
+export interface RunResumeEventLabel {
+  tool_call_id?: string;
+  tool?: string;
+  label?: string;
+}
+
+/** One entry of GET agent-runs/{id}/resume-events. Payloads carry labels, never arguments or provider text. */
+export interface RunResumeEvent {
+  id: string;
+  kind: string;
+  step_position: number | null;
+  attempt: number | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
 }
 
 export interface StepSummary {

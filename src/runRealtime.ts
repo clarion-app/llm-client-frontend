@@ -39,6 +39,20 @@ import { runApi } from './runApi';
 import type { RunSummary, StepSummary, ActionSummary, ArrangementDelegation } from './types';
 
 /**
+ * A change to a run (its row, one of its steps or one of its actions) can
+ * change what its progress view shows, so the run's progress and resume
+ * events refetch. RTK Query refetches an invalidated tag only for a
+ * subscribed query, so nothing is fetched for a run whose progress is not
+ * open, and an event for another run leaves this one alone.
+ */
+function progressTags(runId: string) {
+  return [
+    { type: 'RunProgress' as const, id: runId },
+    { type: 'RunResumeEvents' as const, id: runId },
+  ];
+}
+
+/**
  * Every runId currently holding a cached `getRunArrangement` result —
  * shared by the DelegationUpdated handler and the extended RunUpdated
  * handler below.
@@ -52,6 +66,8 @@ registerUserChannelHandler({
   handler: (payload, dispatch) => {
     const run = payload as RunSummary;
     if (!run || typeof run.id !== 'string') return;
+
+    dispatch(runApi.util.invalidateTags(progressTags(run.id)));
 
     let patched = false;
 
@@ -141,6 +157,8 @@ registerUserChannelHandler({
     const step = payload as StepSummary;
     if (!step || typeof step.id !== 'string' || typeof step.run_id !== 'string') return;
 
+    dispatch(runApi.util.invalidateTags(progressTags(step.run_id)));
+
     let patched = false;
 
     dispatch(
@@ -168,6 +186,8 @@ registerUserChannelHandler({
   handler: (payload, dispatch) => {
     const action = payload as ActionSummary;
     if (!action || typeof action.id !== 'string') return;
+
+    if (typeof action.run_id === 'string') dispatch(runApi.util.invalidateTags(progressTags(action.run_id)));
 
     let patched = false;
 

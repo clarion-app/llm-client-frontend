@@ -1,12 +1,12 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { createBaseQuery } from '@clarion-app/frontend-base';
 import { backend } from './config';
-import type { RunSummary, StepSummary, ActionSummary, ActionDetail, PaginatedEnvelope, ArrangementResponse } from './types';
+import type { RunSummary, StepSummary, ActionSummary, ActionDetail, PaginatedEnvelope, ArrangementResponse, RunProgress, RunResumeEvent } from './types';
 
 export const runApi = createApi({
   reducerPath: 'llm-client-runApi',
   baseQuery: createBaseQuery({ routePrefix: '/api/clarion-app/llm-client', backendConfig: backend }),
-  tagTypes: ['Run', 'RunList', 'RunSteps', 'RunActions', 'Arrangement'],
+  tagTypes: ['Run', 'RunList', 'RunSteps', 'RunActions', 'Arrangement', 'RunProgress', 'RunResumeEvents'],
   endpoints: (builder) => ({
     // GET /agent-runs — the caller's own runs, most recent first, paginated
     // (US6, FR-024/FR-025). The entry point for finding a run with no
@@ -86,6 +86,23 @@ export const runApi = createApi({
       query: (runId) => `/agent-runs/${runId}/arrangement`,
       providesTags: (_result, _error, runId) => [{ type: 'Arrangement', id: runId }],
     }),
+
+    // GET /agent-runs/{runId}/progress — the derived progress view (state,
+    // activity, steps completed, known structure). Refetched on the run's
+    // live events (runRealtime.ts) and polled by RunProgressPanel while the
+    // task is live.
+    getRunProgress: builder.query<RunProgress, string>({
+      query: (runId) => `/agent-runs/${runId}/progress`,
+      providesTags: (_result, _error, runId) => [{ type: 'RunProgress', id: runId }],
+    }),
+
+    // GET /agent-runs/{runId}/resume-events?page=N — the run's interruptions,
+    // resumes and provider retries, oldest first (the newest is last). Page 1
+    // omits the query param, like the other paged reads on this slice.
+    getRunResumeEvents: builder.query<PaginatedEnvelope<RunResumeEvent>, { runId: string; page?: number }>({
+      query: ({ runId, page }) => `/agent-runs/${runId}/resume-events${page && page > 1 ? `?page=${page}` : ''}`,
+      providesTags: (_result, _error, { runId }) => [{ type: 'RunResumeEvents', id: runId }],
+    }),
   }),
 });
 
@@ -97,6 +114,8 @@ export const {
   useGetActionChildrenQuery,
   useGetActionDetailQuery,
   useGetRunArrangementQuery,
+  useGetRunProgressQuery,
+  useGetRunResumeEventsQuery,
   useLazyGetRunStepsQuery,
   useLazyGetStepActionsQuery,
   useLazyGetActionChildrenQuery,
